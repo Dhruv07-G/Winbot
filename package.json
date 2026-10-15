@@ -1,1 +1,53 @@
-{"name":"winbot","version":"0.1.0","private":true,"main":"dist-desktop/main.cjs","scripts":{"dev":"npm run build && electron .","build":"tsc --noEmit && vite build && node scripts/build.mjs","test":"vitest run","start":"electron .","package":"npm run build && electron-builder --dir"},"dependencies":{"dotenv":"^16.4.7","react":"^19.0.0","react-dom":"^19.0.0","tesseract.js":"^6.0.0","zod":"^3.24.2"},"devDependencies":{"@types/node":"^22.13.0","@types/react":"^19.0.0","@types/react-dom":"^19.0.0","electron":"^40.0.0","electron-builder":"^26.0.0","esbuild":"^0.25.0","typescript":"^5.7.3","vite":"^6.1.0","vitest":"^3.0.5"},"build":{"appId":"org.winbot.desktop","productName":"Winbot","files":["dist/**/*","dist-desktop/**/*","package.json"],"mac":{"category":"public.app-category.productivity"},"win":{"target":"nsis"},"linux":{"target":"AppImage"}}}
+{
+  "name": "winbot",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist-desktop/main.cjs",
+  "scripts": {
+    "setup:desktop": "install-electron",
+    "dev": "npm run setup:desktop && npm run build && electron .",
+    "build": "tsc --noEmit && vite build && node scripts/build.mjs",
+    "test": "vitest run",
+    "test:ui": "npm run setup:desktop && npm run build && electron scripts/smoke.cjs",
+    "start": "npm run setup:desktop && electron .",
+    "package": "npm run build && electron-builder --dir"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tesseract.js": "^6.0.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "electron": "^44.7.2",
+    "electron-builder": "^26.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "vitest": "^5.0.4"
+  },
+  "build": {
+    "asar": false,
+    "directories": { "output": "release" },
+    "appId": "org.winbot.desktop",
+    "productName": "Winbot",
+    "files": [
+      "dist/**/*",
+      "dist-desktop/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}
