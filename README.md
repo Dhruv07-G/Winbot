@@ -2,11 +2,11 @@
 
 A visible, on-demand screen assistant for Windows, macOS, and Linux. Electron + React + TypeScript, local Hindi/English OCR, replaceable search and AI adapters.
 
-See [VALIDATION.md](VALIDATION.md) for checks performed and outstanding desktop/live-provider validation. The source builds and unit tests pass; native startup could not be verified in the managed build environment.
+See [VALIDATION.md](VALIDATION.md) for checks performed and outstanding desktop validation. The source builds, unit tests, and live synthetic-image OCR/search/answer pipeline pass; native startup could not be verified in the managed build environment.
 
 ## Windows first: install and run
 
-The local installation includes a portable Windows folder at `release/portable-win-x64`. Open `Winbot.exe` there and keep the entire folder together. Add your OpenAI and Brave keys to the `.env` beside the executable. If `%APPDATA%\winbot\.env` already exists, it takes priority. The portable bundle includes the downloaded English and Hindi OCR models when `local-models` is present at packaging time. Relative `TESSDATA_PATH` values resolve against the selected `.env` directory.
+The local installation includes a portable Windows folder at `release/portable-win-x64`. Open `Winbot.exe` there and keep the entire folder together. Its adjacent `.env` is now configured and tested with Gemini for answers and Tavily for search. Gemini uses the existing `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL` fields through its compatible endpoint; these names do not require an OpenAI-issued key. If `%APPDATA%\winbot\.env` already exists, it takes priority. The portable bundle includes the downloaded English and Hindi OCR models when `local-models` is present at packaging time. Relative `TESSDATA_PATH` values resolve against the selected `.env` directory.
 
 For the source installation, double-click `Start-Winbot.cmd` or use the commands below. Its local `.env` has been configured with the installed OCR model directory; API key fields remain empty until you fill them in.
 
