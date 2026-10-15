@@ -10,9 +10,9 @@
 - Local development and portable `.env` files are configured for installed OCR models. Credentials are kept out of Git and generated diagnostic output.
 
 ## Live provider check
-- Tavily has been added as an alternative to Brave, selected in the local configurations, and included in the rebuilt portable app. A Tavily key is still required for a live search test. Existing AI credentials were preserved.
-- The user configured the AI key in the portable `.env`. The Brave Search key remains empty.
-- A real pipeline run used the synthetic bilingual image and local OCR, with web search disabled only for this diagnostic run. OCR completed; the request to the configured OpenAI endpoint returned HTTP 429. No successful live answer has been verified. The response did not supply one of the diagnostic's recognized error codes, so the precise rate/quota cause is not established.
+- Tavily is selected in the local configurations and included in the rebuilt portable app. The newly configured Tavily key was tested successfully: its API returned HTTP 200 and five sources. A Brave key is unnecessary for this configuration.
+- A real pipeline run used the synthetic bilingual image, local OCR, and live Tavily search. OCR and search completed; the configured OpenAI endpoint returned HTTP 429. Sanitized inspection of the response identified quota/billing-related text. No successful live AI answer has been verified; usable AI quota or another configured answer provider is still required.
+- Existing credentials were preserved and were not printed, committed, or copied into diagnostics.
 - No actual screen content was captured or uploaded. Existing application settings were not changed by this check.
 
 ## Not verified
