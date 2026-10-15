@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:ui": "npm run setup:desktop && npm run build && electron scripts/smoke.cjs",
     "start": "npm run setup:desktop && electron .",
-    "package": "npm run build && electron-builder --dir"
+    "package": "npm run build && electron-builder --dir",
+    "package:portable": "npm run setup:desktop && npm run build && node scripts/package-portable.mjs"
   },
   "dependencies": {
     "dotenv": "^16.4.7",

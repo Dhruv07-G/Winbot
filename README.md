@@ -6,6 +6,10 @@ See [VALIDATION.md](VALIDATION.md) for checks performed and outstanding desktop/
 
 ## Windows first: install and run
 
+The local installation includes a portable Windows folder at `release/portable-win-x64`. Open `Winbot.exe` there and keep the entire folder together. Add your OpenAI and Brave keys to the `.env` beside the executable. If `%APPDATA%\winbot\.env` already exists, it takes priority. The portable bundle includes the downloaded English and Hindi OCR models when `local-models` is present at packaging time. Relative `TESSDATA_PATH` values resolve against the selected `.env` directory.
+
+For the source installation, double-click `Start-Winbot.cmd` or use the commands below. Its local `.env` has been configured with the installed OCR model directory; API key fields remain empty until you fill them in.
+
 Install Node.js 24 LTS (or Node.js 22.12+) and Git. In PowerShell, from this project directory:
 
 ```powershell
@@ -22,6 +26,8 @@ Set `OPENAI_API_KEY` and `BRAVE_API_KEY` in `.env`. The default model is `gpt-4.
 Launch commands automatically run `npm run setup:desktop` to download the pinned Electron runtime if it is missing. This first launch needs internet access; subsequent launches reuse the installed runtime.
 
 MVP packaging leaves application resources unpacked so local OCR worker and WebAssembly assets retain ordinary filesystem paths.
+
+`npm run package:portable` assembles a Windows portable folder using the already installed Electron runtime and production dependencies, without downloading installer tools. It preserves an existing portable `.env`, never copies source credentials, and creates no Start Menu entry or system-wide installation. The standard `npm run package` path remains available but encountered a sandbox cache-permission error in this environment.
 
 `npm run test:ui` builds and runs the Electron renderer/preload smoke test with synthetic state. It does not capture the desktop or call providers; it creates `preview.png` from Winbot's own UI. If Node 24 reports a certificate-chain error on a managed Windows network, use `$env:NODE_USE_SYSTEM_CA='1'` before installation to use Windows' trusted certificates. Do not disable TLS verification.
 

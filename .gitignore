@@ -4,3 +4,4 @@ dist-desktop/
 release/
 .env
 *.log
+local-models/

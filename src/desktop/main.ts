@@ -13,6 +13,7 @@ import {
 } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
+import {existsSync} from "node:fs";
 import dotenv from "dotenv";
 import {
   defaults,
@@ -321,10 +322,17 @@ if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on("second-instance", () => win?.show());
   app.whenReady().then(async () => {
+    const userEnv=file(".env");
+    const envPath=app.isPackaged
+      ? (existsSync(userEnv)?userEnv:path.join(path.dirname(app.getPath("exe")),".env"))
+      : path.join(app.getAppPath(),".env");
     dotenv.config({
-      path: app.isPackaged ? file(".env") : path.join(app.getAppPath(), ".env"),
+      path: envPath,
       quiet: true,
     } as any);
+    if(process.env.TESSDATA_PATH&&!path.isAbsolute(process.env.TESSDATA_PATH)){
+      process.env.TESSDATA_PATH=path.resolve(path.dirname(envPath),process.env.TESSDATA_PATH);
+    }
     try {
       settings = settingsSchema.parse(
         JSON.parse(await fs.readFile(file("settings.json"), "utf8")),
