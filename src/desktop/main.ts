@@ -26,7 +26,7 @@ import {
 import { Pipeline } from "../core/pipeline";
 import { ConsentGate } from "../core/consent";
 const gate = new ConsentGate();
-import { OpenAI, TesseractOCR, BraveSearch } from "../providers";
+import { OpenAI, TesseractOCR, createSearchProvider } from "../providers";
 let win: BrowserWindow,
   tray: Tray,
   settings: Settings = defaults,
@@ -193,7 +193,7 @@ async function answer(question?: string) {
     const pipeline = new Pipeline({
       capture,
       ocr: process.env.OCR_PROVIDER === "vision" ? llm : new TesseractOCR(),
-      search: new BraveSearch(),
+      search: createSearchProvider(),
       llm,
     });
     const result = await pipeline.run({ ...settings }, signal, question);

@@ -156,3 +156,27 @@ export class BraveSearch implements SearchProvider {
       }));
   }
 }
+
+export class TavilySearch implements SearchProvider {
+  async search(query: string, language: string, signal: AbortSignal): Promise<Source[]> {
+    if (!process.env.TAVILY_API_KEY?.trim()) throw new WinbotError("apiKey");
+    const data = await json("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.TAVILY_API_KEY.trim()}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: query.slice(0, 400), language, topic: "general",
+        search_depth: "basic", auto_parameters: false, max_results: 5,
+        include_answer: false, include_raw_content: false, include_images: false,
+      }),
+    }, signal);
+    if (!Array.isArray(data.results)) throw new WinbotError("apiFailure");
+    return data.results
+      .filter((source: any) => typeof source?.url === "string" && /^https?:\/\//.test(source.url))
+      .slice(0, 5)
+      .map((source: any) => ({ title: String(source.title || source.url), url: source.url, description: String(source.content || "") }));
+  }
+}
+
+export function createSearchProvider(): SearchProvider {
+  return process.env.SEARCH_PROVIDER === "tavily" ? new TavilySearch() : new BraveSearch();
+}

@@ -32,6 +32,7 @@ vi.mock('../src/providers',()=>({
   OpenAI:class {answer=mock.answer;extract=mock.extract;},
   TesseractOCR:class {extract=mock.extract;},
   BraveSearch:class {search=async()=>[{title:'Reference',url:'https://example.org',description:'New Delhi'}];},
+  createSearchProvider:()=>({search:async()=>[{title:'Reference',url:'https://example.org',description:'New Delhi'}]}),
 }));
 const command=(action:string,payload?:unknown)=>mock.handler({sender:mock.window.webContents,senderFrame:mock.window.webContents.mainFrame},action,payload);
 beforeAll(async()=>{

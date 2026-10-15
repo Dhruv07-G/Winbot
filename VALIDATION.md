@@ -2,7 +2,7 @@
 
 ## Passed
 - Production TypeScript check, Vite renderer build, and Electron main/preload bundling with Electron 44.7.2 types.
-- 21 tests across consent, pipeline, settings, recommendations, provider adapters, and the real desktop IPC command handler with simulated OS capabilities, running on Vitest 5.0.4.
+- 24 tests across consent, pipeline, settings, recommendations, provider adapters, and the real desktop IPC command handler with simulated OS capabilities, running on Vitest 5.0.4. Tavily tests verify provider selection, basic-search parameters, Hindi queries, safe source URLs, and missing-key handling.
 - Tests cover capture gating, permission revocation, no capture when OCR is disabled, cancellation before network stages, image-buffer clearing on success/failure, empty OCR, Hindi detection, typed questions, invalid settings, safe source protocols, missing credentials, authentication failures, and network failures.
 - npm dependency installation completed; package-lock.json pins the resolved dependencies.
 - Portable Windows bundle assembled at `release/portable-win-x64/Winbot.exe` with 18 production dependency directories. Required main/preload/renderer and OCR files were checked.
@@ -10,6 +10,7 @@
 - Local development and portable `.env` files are configured for installed OCR models. Credentials are kept out of Git and generated diagnostic output.
 
 ## Live provider check
+- Tavily has been added as an alternative to Brave, selected in the local configurations, and included in the rebuilt portable app. A Tavily key is still required for a live search test. Existing AI credentials were preserved.
 - The user configured the AI key in the portable `.env`. The Brave Search key remains empty.
 - A real pipeline run used the synthetic bilingual image and local OCR, with web search disabled only for this diagnostic run. OCR completed; the request to the configured OpenAI endpoint returned HTTP 429. No successful live answer has been verified. The response did not supply one of the diagnostic's recognized error codes, so the precise rate/quota cause is not established.
 - No actual screen content was captured or uploaded. Existing application settings were not changed by this check.

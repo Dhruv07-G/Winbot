@@ -1,9 +1,31 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { BraveSearch, OpenAI } from "../src/providers";
+import { BraveSearch, OpenAI, TavilySearch, createSearchProvider } from "../src/providers";
 import { defaults } from "../src/core/model";
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+});
+it("selects Tavily explicitly and keeps Brave as the backward-compatible default", () => {
+  vi.stubEnv("SEARCH_PROVIDER", "tavily");
+  expect(createSearchProvider()).toBeInstanceOf(TavilySearch);
+  vi.stubEnv("SEARCH_PROVIDER", "");
+  expect(createSearchProvider()).toBeInstanceOf(BraveSearch);
+});
+it("Tavily uses basic search, preserves Hindi and filters unsafe source links", async () => {
+  vi.stubEnv("TAVILY_API_KEY", "test-key");
+  const fetcher = vi.fn(async (_url: string, options: RequestInit) => {
+    expect(JSON.parse(String(options.body))).toMatchObject({query:"भारत की राजधानी?",language:"hi",search_depth:"basic",auto_parameters:false,include_answer:false});
+    expect(options.headers).toMatchObject({Authorization:"Bearer test-key"});
+    return new Response(JSON.stringify({results:[{title:"Reference",url:"https://example.org",content:"New Delhi"},{url:"file:///private"}]}));
+  });
+  vi.stubGlobal("fetch", fetcher);
+  expect(await new TavilySearch().search("भारत की राजधानी?","hi",new AbortController().signal)).toEqual([{title:"Reference",url:"https://example.org",description:"New Delhi"}]);
+});
+it("Tavily rejects missing keys without sending a request", async () => {
+  vi.stubEnv("TAVILY_API_KEY", "");
+  const fetcher=vi.fn();vi.stubGlobal("fetch",fetcher);
+  await expect(new TavilySearch().search("question","en",new AbortController().signal)).rejects.toThrow("apiKey");
+  expect(fetcher).not.toHaveBeenCalled();
 });
 it("search keeps only actual HTTP source links", async () => {
   vi.stubEnv("BRAVE_API_KEY", "test-key");

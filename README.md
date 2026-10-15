@@ -21,6 +21,8 @@ npm run dev
 
 Set `OPENAI_API_KEY` and `BRAVE_API_KEY` in `.env`. The default model is `gpt-4.1-mini`; change `OPENAI_MODEL` and optionally `OPENAI_BASE_URL` for a compatible chat-completions endpoint. No key is exposed to the renderer or included in exports. Restart after changing environment variables.
 
+For a search provider with a free plan, sign up at [Tavily](https://app.tavily.com) and set `SEARCH_PROVIDER=tavily` plus `TAVILY_API_KEY` in `.env`; a Brave key is then unnecessary. As checked on 16 October 2026, [Tavily's Researcher plan](https://www.tavily.com/pricing) includes 1,000 credits per month without a credit card. Winbot explicitly uses basic search and disables automatic depth upgrades. This replaces web search only; the AI answer provider still needs usable quota.
+
 `npm run dev` builds and launches the real desktop app (no hot reload). `npm start` launches an existing build. `npm test` runs deterministic unit tests. `npm run build` checks TypeScript and bundles both layers. `npm run package` creates an unpacked desktop distribution for the current OS; it does not produce signed installers. In packaged mode, place `.env` in Electron's `userData` directory below, rather than inside the application bundle.
 
 Launch commands automatically run `npm run setup:desktop` to download the pinned Electron runtime if it is missing. This first launch needs internet access; subsequent launches reuse the installed runtime.
