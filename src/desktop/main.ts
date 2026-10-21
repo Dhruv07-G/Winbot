@@ -23,6 +23,8 @@ import {
   WinbotError,
   recommendations,
 } from "../core/model";
+import { TraceSession } from "./trace-session";
+import { TraceItem } from "../core/trace";
 import { Pipeline } from "../core/pipeline";
 import { ConsentGate } from "../core/consent";
 const gate = new ConsentGate();
@@ -37,6 +39,8 @@ let win: BrowserWindow,
   quitting = false,
   followups = 0;
 let controller: AbortController | undefined;
+let traceItems: TraceItem[]=[];
+const trace = new TraceSession({assert:()=>gate.assertCapture(),capturing:active=>{capturing=active;emit();},changed:()=>emit()});
 const file = (name: string) => path.join(app.getPath("userData"), name);
 const hi = () =>
   settings.language === "hi" ||
@@ -49,6 +53,9 @@ const state = () => ({
   mode: gate.enabled,
   busy,
   capturing,
+  traceSelecting: trace.selecting,
+  traceCount: trace.regions.length,
+  traceItems,
   collapsed,
   recommendations: recommendations(settings, followups),
   vision: process.env.OCR_PROVIDER === "vision",
@@ -96,9 +103,15 @@ function emit() {
     );
   }
 }
+function cancelPending() {
+  controller?.abort();
+  traceItems=traceItems.map(item=>["done","error"].includes(item.status)?item:{...item,status:"cancelled",text:""});
+  trace.cancel();
+}
 function stop() {
   gate.setMode(false);
-  controller?.abort();
+  cancelPending();
+  win?.show();
   emit();
 }
 let writes = Promise.resolve();
@@ -141,6 +154,36 @@ function hotkey(next: string) {
   if (!ok) throw new WinbotError("hotkey");
   if (next !== settings.hotkey) globalShortcut.unregister(settings.hotkey);
 }
+let registeredTraceKey = "";
+function traceHotkey(next:string){
+ if(next===registeredTraceKey&&globalShortcut.isRegistered(next))return;
+ let ok=false;try{ok=globalShortcut.register(next,()=>{if(trace.selecting)trace.requestSubmit();else void openTrace();});}catch{}
+ if(!ok)throw new WinbotError('hotkey');
+ if(registeredTraceKey)globalShortcut.unregister(registeredTraceKey);registeredTraceKey=next;
+}
+async function openTrace(){
+ if(busy)return;
+ if(!gate.granted){win.show();win.webContents.send('error','consent');return;}
+ gate.setMode(true);win.hide();
+ try{await trace.open({...settings});}catch(e){trace.cancel();win.show();win.webContents.send('error',e instanceof WinbotError?e.code:'capture');}emit();
+}
+async function answerTrace(){
+ if(busy)return;
+ gate.assertCapture();if(!trace.selecting||!trace.regions.length)throw new WinbotError('traceRegions');
+ busy=true;controller=new AbortController();const signal=controller.signal;traceItems=[];
+ win.webContents.send('trace-reset');emit();const snapshot={...settings};
+ try{
+  const items=await trace.run(snapshot,signal,item=>{
+   if(signal.aborted)return;
+   traceItems[item.index]=item;win.webContents.send('trace-item',item);
+   // Keep the side panel hidden until every selected region has been captured.
+   if(!capturing&&item.status!=="reading")win.show();
+  });
+  signal.throwIfAborted();
+  if(settings.history){history=[...items.filter(i=>i.status==='done').map(i=>({id:crypto.randomUUID(),question:i.question,text:i.text,sources:i.sources,at:new Date().toISOString(),language:(/[\u0900-\u097f]/.test(i.question)?'hi':'en') as 'hi'|'en',web:snapshot.traceSearch&&i.sources.length>0})),...history].slice(0,30);await persist('history.json',history);}
+ }catch(e){if(!signal.aborted)win.webContents.send('error',e instanceof WinbotError?e.code:'apiFailure');}
+ finally{trace.cancel();busy=false;capturing=false;controller=undefined;win.show();emit();}
+}
 const capture = {
   async capture(signal: AbortSignal) {
     gate.assertCapture();
@@ -179,11 +222,12 @@ const capture = {
   },
 };
 async function answer(question?: string) {
-  if (busy) return;
+  if (busy || trace.selecting) return;
   if (!gate.granted || !gate.enabled) {
     win.webContents.send("error", "consent");
     return;
   }
+  traceItems=[];win.webContents.send("trace-reset");
   busy = true;
   controller = new AbortController();
   const signal = controller.signal;
@@ -193,6 +237,7 @@ async function answer(question?: string) {
     const pipeline = new Pipeline({
       capture,
       ocr: process.env.OCR_PROVIDER === "vision" ? llm : new TesseractOCR(),
+      question: llm,
       search: createSearchProvider(),
       llm,
     });
@@ -222,6 +267,15 @@ async function answer(question?: string) {
 }
 async function act(action: string, payload: unknown) {
   switch (action) {
+    case "trace-get": return state();
+    case "trace-open": await openTrace(); break;
+    case "trace-select": trace.select(payload); break;
+    case "trace-submit":
+      if(busy)break;
+      gate.assertCapture();trace.select(payload);
+      if(!trace.regions.length)throw new WinbotError("traceRegions");
+      void answerTrace().catch(()=>win.webContents.send("error","apiFailure"));break;
+    case "trace-cancel": cancelPending();win.show();break;
     case "get":
       return state();
     case "consent":
@@ -259,8 +313,10 @@ async function act(action: string, payload: unknown) {
     case "settings": {
       const next = settingsSchema.parse(payload);
       // A settings change cancels work using the old privacy/provider options.
-      controller?.abort();
+      cancelPending();
+      if(next.hotkey===next.traceHotkey)throw new WinbotError('hotkey');
       hotkey(next.hotkey);
+      try{traceHotkey(next.traceHotkey);}catch(e){if(next.hotkey!==settings.hotkey)globalShortcut.unregister(next.hotkey);hotkey(settings.hotkey);throw e;}
       if (!next.history) {
         history = [];
         await persist("history.json", []);
@@ -271,6 +327,7 @@ async function act(action: string, payload: unknown) {
       break;
     }
     case "clear":
+      cancelPending();trace.clear();traceItems=[];win.webContents.send("trace-reset");
       controller?.abort();
       history = [];
       await persist("history.json", []);
@@ -372,8 +429,8 @@ else {
     );
     ipcMain.handle("command", async (event, action, payload) => {
       if (
-        event.sender !== win.webContents ||
-        event.senderFrame !== win.webContents.mainFrame
+        !(event.sender === win.webContents || (trace.owns(event.sender) && ["trace-get","trace-select","trace-submit","trace-cancel"].includes(action))) ||
+        event.senderFrame !== event.sender.mainFrame
       )
         throw new Error("Unauthorized");
       try {
@@ -390,6 +447,7 @@ else {
     emit();
     try {
       hotkey(settings.hotkey);
+      traceHotkey(settings.traceHotkey);
     } catch {
       console.warn("winbot:event", "hotkey");
     }
@@ -404,6 +462,7 @@ else {
   app.on("before-quit", () => {
     quitting = true;
     controller?.abort();
+    trace.cancel();
     globalShortcut.unregisterAll();
   });
   app.on("window-all-closed", () => {});

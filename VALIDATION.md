@@ -29,3 +29,31 @@ Updated Electron from major 40 to 44 and Vitest from major 3 to 5 to remove the 
 
 ## Implementation limits
 Primary-display capture, snippet-based web evidence, session-only recommendation counters, and standalone typed follow-ups. Settings use plaintext local JSON; keys stay in the local .env file. See README.md and ROADMAP.md for platform caveats and follow-on work.
+
+## Current-question regression fix (2026-10-17)
+
+The captured OCR included the new Red Planet MCQ plus an older instruction about New Delhi. Previously all OCR text went directly to search, where truncation favored the old instruction. Screen captures now pass through a swappable QuestionProvider before search and answering. Typed questions bypass selection. Selected questions retain bilingual text and MCQ options, and are displayed expanded in the UI. A new request clears the previous displayed answer.
+
+Validation: 33 automated tests passed; TypeScript check and Vite UI build passed. A live synthetic reproduction containing both the stale Delhi instruction and the bilingual planet MCQ selected only the MCQ, fetched five sources, and answered B. Mars. No desktop capture was needed for this regression. Selection adds one model call per screen capture and can still be ambiguous on crowded screens; display only the intended question or type it when needed.
+
+Environment note: this session's native esbuild resolver could not enumerate an ancestor directory even after read permission was granted. Desktop bundles were produced using the installed Rollup and TypeScript libraries with local module resolution. The live Node probe used --use-system-ca to trust the installed system CA, without disabling TLS verification. Portable resources/app was updated in place; credentials were preserved.
+
+## MCQ label safeguard (2026-10-18)
+The ocean test stored only `A Atlantic B Pacific` as its detected question, so answering used an incorrect label. The original screenshot/raw OCR was not retained; OCR and selection cannot be distinguished retrospectively. Screen-derived answers now request answer text without option letters, and strip common leading letter-label formats. Typed questions retain supplied labels. Selection explicitly preserves labels without renumbering. This is a safeguard, not a claim that OCR labels are now reliable. Exact screen-label identification remains a follow-up improvement.
+
+## Readable explanations (2026-10-18)
+Answers now render Markdown headings/lists/bold and KaTeX fractions instead of showing raw formatting code. Math CSS and fonts are bundled locally; model HTML, images and links are not executed or fetched. Prompts request the final answer followed by simple steps, units and concrete examples. Existing text history uses the new renderer.
+Validation: 43 regression tests passed, plus one visual-preview fixture. TypeScript and production UI build passed. A 440px-wide browser preview confirmed readable lists, Hindi and properly typeset fractions. Portable UI and desktop bundles were updated; restart Winbot to load them. The visual-preview test generates only synthetic test content.
+
+
+## Trace integration — 2026-10-20
+
+- TypeScript check passed; 66 automated tests passed across 8 files.
+- Tests include MCQ label preservation, cut-off options, parallel numbering, streamed SSE chunks, cancellation, image-buffer clearing, overlay selection validation and editing, no capture on opening/cancelling, overlay closure before capture, persisted hotkeys and rollback.
+- Windows Koffi native addon loads successfully. Production renderer build includes both side panel and transparent overlay.
+- These tests mock OS capture and model services. Live desktop overlay appearance, native screenshot correctness, API latency and cross-platform capture remain manual acceptance checks; the tests do not establish a two-second latency guarantee.
+
+
+### Final integration check — 2026-10-21
+
+68 automated tests passed across 9 files; TypeScript and desktop compilation passed. Added Windows/X11 BGRA bitmap conversion coverage, including memory clearing. Updated renderer smoke script covers numbered cards and cancellation, but execution exited before JavaScript with Windows status 0x80000003; this is not a passing UI smoke test. Computer Use found the installed Winbot window but returned an unrelated browser screenshot, so visual acceptance remains unverified. Portable files were updated without replacing API credentials.

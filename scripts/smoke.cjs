@@ -22,6 +22,13 @@ app.whenReady().then(async () => {
       sources: true,
       history: true,
       hotkey: "CommandOrControl+Shift+Space",
+      traceHotkey: "CommandOrControl+Shift+T",
+      traceColor: "#2388ff",
+      traceThickness: 3,
+      traceMCQStyle: "answer",
+      traceTextStyle: "short",
+      traceSpeed: "fastest",
+      traceSearch: false,
     };
     const state = {
       settings,
@@ -34,6 +41,9 @@ app.whenReady().then(async () => {
       recommendations: [],
       vision: false,
       locale: "en-US",
+      traceItems: [],
+      traceSelecting: false,
+      traceCount: 0,
     };
     ipcMain.handle("command", (_event, action, payload) => {
       if (action === "consent") state.consent = true;
@@ -76,6 +86,13 @@ app.whenReady().then(async () => {
       await evaluate("document.body.innerText"),
       /Start Answer Mode/,
     );
+    win.webContents.send("trace-item", {index:0,question:"Synthetic test",text:"Q1: C) Pacific",status:"done",sources:[]});
+    await wait();
+    assert.match(await evaluate("document.body.innerText"), /Q1: C\) Pacific/);
+    state.traceItems=[{index:0,question:"Synthetic test",text:"",status:"cancelled",sources:[]}];
+    win.webContents.send("state",state);
+    await wait();
+    assert.match(await evaluate("document.body.innerText"), /Cancelled/);
     await fs.writeFile(
       path.resolve("preview.png"),
       (await win.webContents.capturePage()).toPNG(),

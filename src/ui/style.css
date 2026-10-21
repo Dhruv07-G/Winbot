@@ -196,7 +196,7 @@ article {
   border-radius: 12px;
 }
 .answer {
-  white-space: pre-wrap;
+  white-space: normal;
   overflow-wrap: anywhere;
   margin-top: 18px;
 }
@@ -305,3 +305,17 @@ footer {
   text-align: center;
   margin-top: 25px;
 }
+
+.answer p { color: var(--text); font-size: 1em; margin: 0 0 1em; }
+.answer > :first-child { margin-top: 0; }
+.answer > :last-child { margin-bottom: 0; }
+.answer h1, .answer h2, .answer h3 { font-size: 1.05em; line-height: 1.4; margin: 1.2em 0 .6em; }
+.answer ol, .answer ul { padding-left: 1.4em; margin: .6em 0 1em; }
+.answer li { margin: .65em 0; }
+.answer li > p { margin: .3em 0; }
+.answer pre { white-space: pre-wrap; padding: .8em; background: var(--bg); border-radius: 8px; }
+.answer code { font-size: .9em; }
+.answer .katex { font-size: 1.08em; }
+.answer .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: .3em 0; text-align: left; }
+.answer .katex-display > .katex { text-align: left; }
+.answer p > .katex { display: inline-block; max-width: 100%; overflow-x: auto; overflow-y: hidden; vertical-align: middle; padding: .15em 0; }

@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Answer, Settings, defaults, languageOf } from "../core/model";
+import "katex/dist/katex.min.css";
 import "./style.css";
+import type { TraceItem } from "../core/trace";
+import { AnswerContent } from "./AnswerContent";
 type State = {
   settings: Settings;
   history: Answer[];
@@ -13,6 +16,9 @@ type State = {
   recommendations: string[];
   vision: boolean;
   locale: string;
+  traceSelecting: boolean;
+  traceCount: number;
+  traceItems: TraceItem[];
 };
 declare global {
   interface Window {
@@ -26,6 +32,8 @@ declare global {
   }
 }
 const errors: Record<string, [string, string]> = {
+  traceUnsupported: ["Region capture is unavailable on this platform. Linux Trace requires X11.","इस प्लेटफॉर्म पर क्षेत्र कैप्चर उपलब्ध नहीं। Linux पर X11 चाहिए।"],
+  traceRegions: ["Select 1–8 complete questions, including all options.","सभी विकल्पों सहित 1–8 पूरे प्रश्न चुनें।"],
   consent: [
     "Grant screen permission and enable Answer Mode first.",
     "पहले स्क्रीन की अनुमति दें और उत्तर मोड चालू करें।",
@@ -96,11 +104,16 @@ function App() {
   useEffect(() => {
     void command("get");
     const off = [
-      window.winbot.on("state", setState),
+      window.winbot.on("state", (next: State) => { setState(next); if (next.busy) setAnswer(undefined); }),
       window.winbot.on("answer", (a: Answer) => {
         setAnswer(a);
         setTab("answer");
         setError("");
+      }),
+      window.winbot.on("trace-reset", () => {setAnswer(undefined);setState(prev=>prev?{...prev,traceItems:[]}:prev);}),
+      window.winbot.on("trace-item", (item:TraceItem) => {
+        setAnswer(undefined);setTab("answer");setError("");
+        setState(prev=>{if(!prev)return prev;const items=[...(prev.traceItems||[])];items[item.index]=item;return {...prev,traceItems:items};});
       }),
       window.winbot.on("error", setError),
       window.winbot.on("cleared", () => setAnswer(undefined)),
@@ -258,6 +271,9 @@ function App() {
           {tab === "answer" && state?.consent && (
             <>
               <section className="controls">
+                <button disabled={state.busy} onClick={()=>command("trace-open")}>{t("Trace & Answer", "चुनें और उत्तर पाएँ")}</button>
+                {state.busy && state.traceItems.length>0 && <button onClick={()=>command("trace-cancel")}>{t("Cancel batch", "बैच रद्द करें")}</button>}
+                {state.traceSelecting && <span>{state.traceCount} {t("questions selected", "प्रश्न चुने गए")}</span>}
                 <button
                   className={state.mode ? "stop" : "primary"}
                   onClick={() => command("mode", !state.mode)}
@@ -270,10 +286,19 @@ function App() {
                   disabled={!state.mode || state.busy}
                   onClick={() => command("capture")}
                 >
-                  {t("Capture again", "फिर कैप्चर करें")}
+                  {t("Capture new question", "फिर कैप्चर करें")}
                 </button>
                 <small>{s.hotkey}</small>
               </section>
+              {!!state.traceItems?.length && <section className="trace-results" aria-live="polite">
+                <h2>{t("Traced answers", "चुने गए प्रश्नों के उत्तर")}</h2>
+                {state.traceItems.filter(Boolean).map(item=><article key={item.index}>
+                  <strong>Q{item.index+1}</strong> <small>{item.status==='cancelled'?t("Cancelled","रद्द किया गया"):item.status==='done'?t("Complete","पूरा"):item.status==='error'?t("Could not answer","उत्तर नहीं मिला"):item.status==='reading'?t("Reading region…","चुना भाग पढ़ रहे हैं…"):item.status==='searching'?t("Searching…","खोज रहे हैं…"):t("Answering…","उत्तर आ रहा है…")}{item.cached?t(" · cached"," · कैश से"):''}{item.ms?" · "+(item.ms/1000).toFixed(1)+"s":''}</small>
+                  {item.status==='error'?<p role="alert">{(errors[item.error||'apiFailure']||errors.apiFailure)[hindi?1:0]}</p>:item.text&&<AnswerContent text={item.text}/>}
+                  {item.question&&<details><summary>{t("Detected text","पहचाना गया पाठ")}</summary><p>{item.question}</p></details>}
+                  {s.sources&&item.sources.length>0&&<div className="sources">{item.sources.map((source,i)=><button key={i} onClick={()=>command('link',source.url)}>{i+1}. {source.title}</button>)}</div>}
+                </article>)}
+              </section>}
               {answer ? (
                 <article>
                   <div className="eyebrow">
@@ -284,13 +309,13 @@ function App() {
                           "उत्तर · वेब से सत्यापित नहीं",
                         )}
                   </div>
-                  <details>
+                  <details open>
                     <summary>
                       {t("Detected question", "पहचाना गया प्रश्न")}
                     </summary>
                     <p>{answer.question}</p>
                   </details>
-                  <div className="answer">{answer.text}</div>
+                  <AnswerContent text={answer.text} />
                   {s.sources && answer.sources.length > 0 && (
                     <div className="sources">
                       <h3>{t("Sources", "स्रोत")}</h3>
@@ -305,7 +330,7 @@ function App() {
                     </div>
                   )}
                 </article>
-              ) : (
+              ) : !state.traceItems?.length && (
                 <section className="empty">
                   <div className="orbit">✦</div>
                   <h2>
@@ -316,7 +341,7 @@ function App() {
                   </h2>
                   <p>
                     {t(
-                      "Open a question on your primary screen, then start Answer Mode.",
+                      "Show the new question on your primary screen, then click Capture new question. Each click takes one fresh screenshot.",
                       "मुख्य स्क्रीन पर प्रश्न खोलें, फिर उत्तर मोड शुरू करें।",
                     )}
                   </p>
@@ -492,6 +517,17 @@ function App() {
                   </label>
                 ),
               )}
+              <h3>{t("Trace & Answer settings", "चुनें और उत्तर पाएँ सेटिंग्स")}</h3>
+              <div className="grid">
+                {select("traceMCQStyle",t("MCQ answers","बहुविकल्पीय उत्तर"),[["answer",t("Answer only","केवल उत्तर")],["reason",t("Answer + one-line reason","उत्तर और एक पंक्ति कारण")],["full",t("Full explanation","पूरा विवरण")]])}
+                {select("traceTextStyle",t("Other answers","अन्य उत्तर"),[["short",t("Short","संक्षिप्त")],["detailed",t("Detailed","विस्तृत")]])}
+                {select("traceSpeed",t("Model preference","मॉडल प्राथमिकता"),[["fastest",t("Fastest","सबसे तेज")],["balanced",t("Balanced","संतुलित")],["accurate",t("Most accurate","अधिक सटीक")]])}
+                <label>{t("Trace color","चयन रंग")}<input type="color" value={draft.traceColor} onChange={e=>field('traceColor',e.target.value)}/></label>
+                <label>{t("Line thickness","रेखा की मोटाई")}<input type="number" min="2" max="12" value={draft.traceThickness} onChange={e=>field('traceThickness',Number(e.target.value))}/></label>
+                <label>{t("Trace hotkey","चयन शॉर्टकट")}<input value={draft.traceHotkey} onChange={e=>field('traceHotkey',e.target.value)}/></label>
+              </div>
+              <label className="check"><input type="checkbox" checked={draft.traceSearch} onChange={e=>field('traceSearch',e.target.checked)}/>{t("Use internet sources for traced questions (slower)","चुने प्रश्नों के लिए इंटरनेट स्रोत (धीमा)")}</label>
+              <p>{t("Trace uses the selected language above. Fast models are configured in .env; without overrides all preferences use your current model.","चयन मोड ऊपर चुनी भाषा का उपयोग करता है। मॉडल .env में बदलें; बिना बदलाव सभी प्राथमिकताएँ वर्तमान मॉडल उपयोग करती हैं।")}</p>
               <button
                 className="primary"
                 onClick={() => command("settings", draft)}

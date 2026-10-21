@@ -15,3 +15,10 @@
 - Offline model: local OpenAI-compatible server adapter and optional local search index.
 - Plugin system: versioned provider contracts, declared permissions, signed packages, isolated execution.
 - Opt-in AI recommendations built on the rule-based interface; no usage telemetry by default.
+
+
+## Trace follow-up
+- Manual Windows acceptance: multi-region rectangles/freehand, Redraw, Esc, batch cancellation, saved custom hotkey, actual OCR and provider latency.
+- Verify macOS/X11 capture on hardware; replace deprecated macOS capture with ScreenCaptureKit and add a region-capable Wayland adapter.
+- Improve validation for legitimate two/three-choice MCQs, clipboard/text extraction, and selection across multiple monitors.
+- Measure cold/warm capture-to-first-answer timings; optimize based on stage logs.

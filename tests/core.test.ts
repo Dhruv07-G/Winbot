@@ -11,8 +11,9 @@ function setup(text = "What is gravity?") {
   const p = {
     capture: { capture: vi.fn(async () => image) },
     ocr: { extract: vi.fn(async () => text) },
+    question: { selectQuestion: vi.fn(async (text: string) => text) },
     search: {
-      search: vi.fn(async () => [
+      search: vi.fn(async (_query: string) => [
         {
           title: "Science",
           url: "https://example.org",
@@ -20,7 +21,7 @@ function setup(text = "What is gravity?") {
         },
       ]),
     },
-    llm: { answer: vi.fn(async () => "Answer [1]") },
+    llm: { answer: vi.fn(async (_question: string) => "Answer [1]") },
   };
   return { p, image, run: new Pipeline(p) };
 }
@@ -97,4 +98,33 @@ describe("settings and recommendations", () => {
       recommendations({ ...defaults, style: "detailed" }, 3),
     ).not.toContain("detail");
   });
+});
+
+it("selects the new MCQ before searching and never reuses the previous question", async () => {
+  const { p, run } = setup();
+  p.ocr.extract.mockResolvedValueOnce("Old screen question").mockResolvedValueOnce("Old answer: New Delhi. Which planet is known as the Red Planet? A. Venus B. Mars");
+  p.question.selectQuestion.mockResolvedValueOnce("What is the capital of India?").mockResolvedValueOnce("Which planet is known as the Red Planet? A. Venus B. Mars");
+  await run.run(defaults, new AbortController().signal);
+  const next = await run.run(defaults, new AbortController().signal);
+  expect(p.capture.capture).toHaveBeenCalledTimes(2);
+  expect(p.question.selectQuestion).toHaveBeenCalledTimes(2);
+  expect(p.search.search.mock.calls[1]?.[0]).toBe(next.question);
+  expect(next.question).not.toContain("Delhi");
+  expect(p.llm.answer.mock.calls[1]?.[0]).toBe(next.question);
+});
+it("skips selection for typed questions and stops ambiguous captures before search", async () => {
+  const { p, run } = setup();
+  await run.run(defaults, new AbortController().signal, "My exact question");
+  expect(p.question.selectQuestion).not.toHaveBeenCalled();
+  p.search.search.mockClear();
+  p.question.selectQuestion.mockResolvedValue(" ");
+  await expect(run.run(defaults, new AbortController().signal)).rejects.toThrow("noText");
+  expect(p.search.search).not.toHaveBeenCalled();
+});
+it("cancellation during question selection prevents search", async () => {
+  const { p, run } = setup();
+  const controller = new AbortController();
+  p.question.selectQuestion.mockImplementation(async () => { controller.abort(); return "New question"; });
+  await expect(run.run(defaults, controller.signal)).rejects.toThrow();
+  expect(p.search.search).not.toHaveBeenCalled();
 });

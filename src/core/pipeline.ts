@@ -2,6 +2,7 @@ import {
   Answer,
   CaptureProvider,
   OCRProvider,
+  QuestionProvider,
   SearchProvider,
   LLMProvider,
   Settings,
@@ -13,6 +14,7 @@ export class Pipeline {
     private providers: {
       capture: CaptureProvider;
       ocr: OCRProvider;
+      question: QuestionProvider;
       search: SearchProvider;
       llm: LLMProvider;
     },
@@ -35,6 +37,9 @@ export class Pipeline {
         image?.fill(0);
         image = undefined;
       }
+      signal.throwIfAborted();
+      if (!text?.trim()) throw new WinbotError("noText");
+      text = await this.providers.question.selectQuestion(text.slice(0, 16000), signal);
     }
     signal.throwIfAborted();
     text = text?.trim().slice(0, 16000);
@@ -50,6 +55,7 @@ export class Pipeline {
       settings,
       language,
       signal,
+      !question?.trim(),
     );
     signal.throwIfAborted();
     return {

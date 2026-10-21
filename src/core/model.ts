@@ -16,6 +16,13 @@ export const settingsSchema = z
     search: z.boolean().default(true),
     sources: z.boolean().default(true),
     history: z.boolean().default(true),
+    traceHotkey: z.string().min(3).max(80).default("CommandOrControl+Shift+T"),
+    traceColor: z.string().regex(/^#[0-9a-f]{6}$/i).default("#2388ff"),
+    traceThickness: z.number().int().min(2).max(12).default(3),
+    traceMCQStyle: z.enum(["answer", "reason", "full"]).default("answer"),
+    traceTextStyle: z.enum(["short", "detailed"]).default("short"),
+    traceSpeed: z.enum(["fastest", "balanced", "accurate"]).default("fastest"),
+    traceSearch: z.boolean().default(false),
     hotkey: z.string().min(3).max(80).default("CommandOrControl+Shift+Space"),
   })
   .strict();
@@ -37,6 +44,9 @@ export interface CaptureProvider {
 export interface OCRProvider {
   extract(image: Uint8Array, signal: AbortSignal): Promise<string>;
 }
+export interface QuestionProvider {
+  selectQuestion(screenText: string, signal: AbortSignal): Promise<string>;
+}
 export interface SearchProvider {
   search(
     query: string,
@@ -51,6 +61,7 @@ export interface LLMProvider {
     settings: Settings,
     language: string,
     signal: AbortSignal,
+    screenCapture?: boolean,
   ): Promise<string>;
 }
 export class WinbotError extends Error {

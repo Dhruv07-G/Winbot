@@ -29,14 +29,14 @@ vi.mock('electron',()=>({
   shell:{openExternal:vi.fn()},dialog:{},
 }));
 vi.mock('../src/providers',()=>({
-  OpenAI:class {answer=mock.answer;extract=mock.extract;},
+  OpenAI:class {answer=mock.answer;extract=mock.extract;selectQuestion=async(text:string)=>text;},
   TesseractOCR:class {extract=mock.extract;},
   BraveSearch:class {search=async()=>[{title:'Reference',url:'https://example.org',description:'New Delhi'}];},
   createSearchProvider:()=>({search:async()=>[{title:'Reference',url:'https://example.org',description:'New Delhi'}]}),
 }));
 const command=(action:string,payload?:unknown)=>mock.handler({sender:mock.window.webContents,senderFrame:mock.window.webContents.mainFrame},action,payload);
 beforeAll(async()=>{
-  const root=path.resolve('../../work');await fs.mkdir(root,{recursive:true});
+  const root=path.resolve('node_modules/.cache/winbot-tests');await fs.mkdir(root,{recursive:true});
   mock.profile=await fs.mkdtemp(path.join(root,'desktop-test-'));
   await import('../src/desktop/main');
   await vi.waitFor(()=>expect(mock.handler).toBeTypeOf('function'));
@@ -69,4 +69,19 @@ it('revoking permission immediately blocks further capture and hotkeys',async()=
   await command('capture');mock.shortcuts.get('CommandOrControl+Shift+Space')!();
   expect(mock.sources).toHaveBeenCalledTimes(before);
   const state=(await command('get')).state;expect(state.mode).toBe(false);expect(state.consent).toBe(false);
+});
+it('persists the trace hotkey and rolls back a conflicting registration',async()=>{
+  const current=(await command('get')).state.settings;
+  const next={...current,traceHotkey:'CommandOrControl+Shift+Y'};
+  expect((await command('settings',next)).ok).toBe(true);
+  expect(mock.shortcuts.has(current.traceHotkey)).toBe(false);
+  expect(mock.shortcuts.has(next.traceHotkey)).toBe(true);
+  const saved=JSON.parse(await fs.readFile(path.join(mock.profile,'settings.json'),'utf8'));
+  expect(saved.traceHotkey).toBe(next.traceHotkey);
+  expect((await command('settings',{...next,traceHotkey:'invalid',hotkey:'CommandOrControl+Shift+X'})).error).toBe('hotkey');
+  expect(mock.shortcuts.has(next.hotkey)).toBe(true);
+  expect(mock.shortcuts.has(next.traceHotkey)).toBe(true);
+  expect(mock.shortcuts.has('CommandOrControl+Shift+X')).toBe(false);
+  mock.shortcuts.get(next.traceHotkey)!();
+  expect(mock.window.webContents.send).toHaveBeenCalledWith('error','consent');
 });

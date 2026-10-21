@@ -110,3 +110,42 @@ it("sends Hindi instructions and returns plain answer text", async () => {
   ).toBe("उत्तर");
   expect(body.messages[0].content).toContain("Hindi");
 });
+
+it("parses selected bilingual MCQs without leaking full OCR text into the result", async () => {
+  vi.stubEnv("OPENAI_API_KEY", "test");
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { content: '```json\n{"question":"Which planet? A. Venus B. Mars"}\n```' } }] }))));
+  expect(await new OpenAI().selectQuestion("Old answer and new MCQ", new AbortController().signal)).toBe("Which planet? A. Venus B. Mars");
+});
+it.each(['not json', '{}', '{"question":""}', '{"question":42}', 'null'])("rejects unusable selection: %s", async (content) => {
+  vi.stubEnv("OPENAI_API_KEY", "test");
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { content } }] }))));
+  await expect(new OpenAI().selectQuestion("screen", new AbortController().signal)).rejects.toThrow("noText");
+});
+
+it("does not present unreliable OCR option letters as answer labels", async () => {
+  vi.stubEnv("OPENAI_API_KEY", "test");
+  let prompt = "";
+  vi.stubGlobal("fetch", vi.fn(async (_url, options) => {
+    prompt = JSON.parse(options.body).messages[0].content;
+    return new Response(JSON.stringify({choices:[{message:{content:"**B) Pacific Ocean** [1]"}}]}));
+  }));
+  const provider = new OpenAI();
+  expect(await provider.answer("Largest ocean? A Atlantic B Pacific", [], defaults, "en", new AbortController().signal, true)).toBe("Pacific Ocean [1]");
+  expect(prompt).toContain("without any option letter");
+  expect(await provider.answer("Largest ocean? A Atlantic B Pacific", [], defaults, "en", new AbortController().signal, false)).toBe("**B) Pacific Ocean** [1]");
+});
+it("keeps numbered steps intact for screen answers", async () => {
+  const { omitScreenOptionLabel } = await import("../src/providers");
+  expect(omitScreenOptionLabel("1. Add the values.\n2. Divide by two.")).toBe("1. Add the values.\n2. Divide by two.");
+  expect(omitScreenOptionLabel("Pacific Ocean [1]")).toBe("Pacific Ocean [1]");
+});
+
+it.each([
+ ["**Answer:** **B. Mars**", "Mars"],
+ ["**B Pacific** [1]", "Pacific [1]"],
+ ["(C) Pacific Ocean", "Pacific Ocean"],
+ ["A large ocean", "A large ocean"],
+])("handles formatted option labels: %s", async (input, expected) => {
+ const { omitScreenOptionLabel } = await import("../src/providers");
+ expect(omitScreenOptionLabel(input)).toBe(expected);
+});

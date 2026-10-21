@@ -70,9 +70,9 @@ Settings and up to 30 text answers are stored as JSON under Electron `userData`:
 
 ## Privacy and limits
 
-No recording loop, stealth features, screen-sharing evasion, or proctoring evasion exist. Screenshots stay in memory on the client and are not written to history or logs. Logs contain event codes only. The app has no autostart registration. Closing the window hides it; use the tray menu to quit. Users are responsible for following school, workplace, and exam rules.
+No recording loop, stealth features, screen-sharing evasion, or proctoring evasion exist. Screenshots stay in memory on the client and are not written to history or logs. Logs contain event codes and per-stage timings, never question text or screenshots. The app has no autostart registration. Closing the window hides it; use the tray menu to quit. Users are responsible for following school, workplace, and exam rules.
 
-The full primary screen is captured, so unrelated visible text can enter OCR/search. Selecting a region and reviewing extracted text before upload are roadmap items. Search uses snippets, not full-page crawling. Treat answers as fallible and check cited sources. Native capture behavior must be smoke-tested on each target OS before distribution.
+Ordinary Answer Mode captures the primary screen, so unrelated visible text can enter OCR/search. Trace mode captures only the selected rectangles. Reviewing extracted text before upload remains a roadmap item. Search uses snippets, not full-page crawling. Treat answers as fallible and check cited sources. Native capture behavior must be smoke-tested on each target OS before distribution.
 
 Electron's screen enumeration can transiently create thumbnails of other connected displays; only the selected primary display image is sent into OCR. No thumbnails are saved.
 
@@ -89,3 +89,25 @@ Manual acceptance checklist:
 - History clears, disabling history removes its file contents, close hides, tray Quit exits.
 
 API references: [Electron desktop capture](https://www.electronjs.org/docs/latest/api/desktop-capturer), [Tesseract.js](https://github.com/naptha/tesseract.js), [Brave Search](https://api-dashboard.search.brave.com/documentation), [OpenAI Chat Completions](https://platform.openai.com/docs/api-reference/chat).
+
+### When an old question is answered
+Click **Capture new question** for each new screen. The expanded **Detected question** shows the selected question and choices. Screen OCR is filtered through the configured AI provider before web search, so old answers and app instructions are excluded. This adds one AI call per screen capture. If several questions are visible and selection is unclear, scroll to show only the intended one or type it in the question field.
+
+Optional live regression (uses your configured providers and API quota, with synthetic text only): `node scripts/test-question-live.mjs`.
+
+Screen-derived MCQ answers give the answer text without an option letter because OCR can miss or misread labels. Use the visible original options to match the answer text; typed questions retain their supplied labels.
+
+
+## Trace & Answer
+
+Grant screen consent in the side panel, then click **Trace & Answer** or press **Ctrl+Shift+T** (macOS: Cmd+Shift+T). Draw rectangles or freehand strokes around complete questions and every option. Each stroke captures its rectangular bounding box. Select up to eight questions on the monitor containing the pointer.
+
+- **Redraw Qn** replaces that region while keeping its question number. **Qn ×** removes it; **Undo** / Ctrl+Z removes the last region; **Clear** removes all selections.
+- **Enter**, **Answer**, or the trace hotkey submits all selections. **Esc** cancels selection without capturing. **Cancel batch**, switching Answer Mode off, or revoking consent aborts pending work; unfinished cards become Cancelled and late results are ignored.
+- Cards retain Q1/Q2 ordering even when later questions finish first. Expand Detected question to check OCR. MCQ labels and option text come from the selected region. Incomplete option sequences return **Unclear – re-trace**. This initial validator conservatively requires four to eight sequential choices; two- or three-choice MCQs need a later validation improvement.
+- Settings persist trace hotkey, color, thickness, MCQ explanation level, short/detailed answers, language, speed preference, and internet toggle. Conflicting shortcuts are rejected and previous shortcuts retained. Auto language follows the detected question.
+- Fastest/Balanced/Most accurate use `TRACE_MODEL_FAST`, `TRACE_MODEL_BALANCED`, and `TRACE_MODEL_ACCURATE` in `.env`; omitted values use your existing `OPENAI_MODEL`. Trace always uses local English/Hindi OCR. Internet sources are off by default for speed.
+
+The transparent overlay closes before capture. A native worker captures only each requested rectangle in memory; images are resized to at most 1800 pixels on the longest side. Up to three OCR workers run concurrently, followed by parallel streamed model requests. Identical text/settings/model requests share a two-minute memory cache (maximum 50 results), cleared with Clear all. No screenshot files are created. Timing logs cover capture, OCR, search, first token, model completion, and display-ready. Two-second answers are a target, not a guarantee; cold OCR/model and network latency can take longer.
+
+Windows uses GDI region capture. macOS uses CoreGraphics (OS screen permission required; this adapter needs device testing and migration to ScreenCaptureKit). Linux uses X11; Wayland currently reports an unsupported message. Multi-monitor sessions currently select one monitor at a time. Native capture and end-to-end timing require manual verification on each OS.
