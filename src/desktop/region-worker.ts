@@ -1,5 +1,6 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import koffi from 'koffi';
+let stage='captureNativeLoad';
 type Rect={x:number;y:number;width:number;height:number};
 function bmp(bytes:Buffer,width:number,height:number){
  const header=Buffer.alloc(54);header.write('BM');header.writeUInt32LE(54+bytes.length,2);header.writeUInt32LE(54,10);header.writeUInt32LE(40,14);header.writeInt32LE(width,18);header.writeInt32LE(-height,22);header.writeUInt16LE(1,26);header.writeUInt16LE(32,28);header.writeUInt32LE(bytes.length,34);
@@ -12,15 +13,15 @@ function windows(r:Rect){
  const CreateBitmap=gdi.func('void * __stdcall CreateCompatibleBitmap(void *, int, int)'),DeleteObject=gdi.func('int __stdcall DeleteObject(void *)'),Select=gdi.func('void * __stdcall SelectObject(void *,void *)');
  const BitBlt=gdi.func('int __stdcall BitBlt(void *,int,int,int,int,void *,int,int,uint32_t)');
  const GetBits=gdi.func('int __stdcall GetDIBits(void *,void *,uint32_t,uint32_t,_Out_ void *,void *,uint32_t)');
- const dc=GetDC(null);if(!dc)throw Error('capture');let mem:any=null,bitmap:any=null,old:any=null;
+ stage='captureNativeDC';const dc=GetDC(null);if(!dc)throw Error('capture');let mem:any=null,bitmap:any=null,old:any=null;
  try{
-  mem=CreateDC(dc);bitmap=CreateBitmap(dc,r.width,r.height);if(!mem||!bitmap)throw Error('capture');old=Select(mem,bitmap);
+  stage='captureNativeBitmap';mem=CreateDC(dc);bitmap=CreateBitmap(dc,r.width,r.height);if(!mem||!bitmap)throw Error('capture');old=Select(mem,bitmap);
   // Only this rectangle is copied: no full-screen bitmap is allocated.
-  if(!BitBlt(mem,0,0,r.width,r.height,dc,r.x,r.y,0x00CC0020|0x40000000))throw Error('capture');
+  stage='captureNativeBlit';if(!BitBlt(mem,0,0,r.width,r.height,dc,r.x,r.y,0x00CC0020|0x40000000))throw Error('capture');
   Select(mem,old);old=null;
   const info=Buffer.alloc(40);info.writeUInt32LE(40,0);info.writeInt32LE(r.width,4);info.writeInt32LE(-r.height,8);info.writeUInt16LE(1,12);info.writeUInt16LE(32,14);
   const pixels=Buffer.alloc(r.width*r.height*4);
-  if(GetBits(dc,bitmap,0,r.height,pixels,info,0)!==r.height){pixels.fill(0);throw Error('capture');}
+  stage='captureNativeRead';if(GetBits(dc,bitmap,0,r.height,pixels,info,0)!==r.height){pixels.fill(0);throw Error('capture');}
   for(let i=3;i<pixels.length;i+=4)pixels[i]=255;
   return bmp(pixels,r.width,r.height);
  }finally{if(old&&mem)Select(mem,old);if(bitmap)DeleteObject(bitmap);if(mem)DeleteDC(mem);ReleaseDC(null,dc);}
@@ -58,8 +59,8 @@ function linux(r:Rect){
  }finally{if(image)x.func('int XDestroyImage(void *)')(image);x.func('int XCloseDisplay(void *)')(display);}
 }
 try{
- const r:Rect=workerData;
+ stage='traceRegions';const r:Rect=workerData;
  if(![r.x,r.y,r.width,r.height].every(Number.isInteger)||r.width<1||r.height<1||r.width*r.height>24000000)throw Error('capture');
- const image=process.platform==='win32'?windows(r):process.platform==='darwin'?mac(r):process.platform==='linux'?linux(r):(()=>{throw Error('traceUnsupported');})();
- const bytes=new Uint8Array(image);image.fill(0);parentPort!.postMessage({bytes},[bytes.buffer]);
-}catch(e){parentPort!.postMessage({error:e instanceof Error&&e.message==='traceUnsupported'?'traceUnsupported':'capture'});}
+ stage='captureNativeLoad';const image=process.platform==='win32'?windows(r):process.platform==='darwin'?mac(r):process.platform==='linux'?linux(r):(()=>{throw Error('traceUnsupported');})();
+ stage='captureTransfer';const bytes=new Uint8Array(image);image.fill(0);parentPort!.postMessage({bytes},[bytes.buffer]);
+}catch(e){parentPort!.postMessage({error:e instanceof Error&&e.message==='traceUnsupported'?'traceUnsupported':stage});}

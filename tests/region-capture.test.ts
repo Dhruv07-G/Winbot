@@ -1,10 +1,10 @@
 import {expect,it,vi} from 'vitest';
 const mock=vi.hoisted(()=>({
  bytes:Buffer.alloc(54+16*12*4),
- bitmap:vi.fn(),encoded:vi.fn(),terminate:vi.fn(),
+ bitmap:vi.fn(),encoded:vi.fn(),terminate:vi.fn(),error:'' as string,
 }));
 vi.mock('node:worker_threads',()=>({Worker:class{
- once(name:string,callback:(value:any)=>void){if(name==='message')queueMicrotask(()=>callback({bytes:mock.bytes}));return this;}
+ once(name:string,callback:(value:any)=>void){if(name==='message')queueMicrotask(()=>callback(mock.error?{error:mock.error}:{bytes:mock.bytes}));return this;}
  terminate=mock.terminate;
 }}));
 vi.mock('electron',()=>{
@@ -26,4 +26,9 @@ it('passes top-down BGRA to the bitmap API and erases worker bytes',async()=>{
 });
 it('rejects out-of-bounds selections without invoking a worker',async()=>{
  await expect(captureRegion({x:90,y:0,width:16,height:12},{bounds:{width:100,height:100}} as Electron.Display,new AbortController().signal)).rejects.toThrow();
+});
+
+it.each(['captureNativeDC','captureNativeBlit','captureNativeRead'])('preserves the native failure stage %s',async error=>{
+ mock.error=error;
+ try{await expect(captureRegion({x:0,y:0,width:16,height:12},{bounds:{x:0,y:0,width:100,height:100}} as Electron.Display,new AbortController().signal)).rejects.toMatchObject({code:error});}finally{mock.error='';}
 });

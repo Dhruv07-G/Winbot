@@ -57,3 +57,10 @@ Validation: 43 regression tests passed, plus one visual-preview fixture. TypeScr
 ### Final integration check — 2026-10-21
 
 68 automated tests passed across 9 files; TypeScript and desktop compilation passed. Added Windows/X11 BGRA bitmap conversion coverage, including memory clearing. Updated renderer smoke script covers numbered cards and cancellation, but execution exited before JavaScript with Windows status 0x80000003; this is not a passing UI smoke test. Computer Use found the installed Winbot window but returned an unrelated browser screenshot, so visual acceptance remains unverified. Portable files were updated without replacing API credentials.
+
+
+### Trace capture investigation — 2026-10-21
+
+User reports capture failure after drawing a Trace region, including after restart. Root cause remains unconfirmed. Installed Koffi loads, and the installed worker passed synthetic memory-bitmap copy/read/transfer in the packaged Electron 44.7.2 runtime (scripts/test-native-capture.cjs). This test never copies desktop pixels and does not prove real screen capture works.
+
+Replaced the generic permission advice with distinct capture-stage error codes. Trace failures save only timestamp, code, platform, and Electron version to userData/capture-diagnostic.json; no questions, images, or API credentials are included. Existing 68 tests passed, followed by 5 region tests including 3 new native-stage propagation cases. Type checking, renderer build and desktop build passed. Installed main and worker SHA256 hashes match. Awaiting user's live diagnostic code before claiming a root-cause fix.

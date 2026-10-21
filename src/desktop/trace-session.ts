@@ -42,7 +42,7 @@ export class TraceSession {
  async run(settings:Settings,signal:AbortSignal,emit:(item:TraceItem)=>void){
   this.hooks.assert();const regions=[...this.regions];if(!regions.length||!this.display)throw new WinbotError('traceRegions');
   const display=screen.getAllDisplays().find(d=>d.id===this.display!.id);
-  if(!display||JSON.stringify(display.bounds)!==JSON.stringify(this.display.bounds)||display.scaleFactor!==this.display.scaleFactor)throw new WinbotError('capture');
+  if(!display||JSON.stringify(display.bounds)!==JSON.stringify(this.display.bounds)||display.scaleFactor!==this.display.scaleFactor)throw new WinbotError('captureDisplayChanged');
   this.overlay?.hide();this.overlay?.destroy();this.overlay=undefined;this.regions=[];this.hooks.changed();
   await new Promise(r=>setTimeout(r,180));signal.throwIfAborted();
   return this.pipeline.run(regions,settings,signal,emit);

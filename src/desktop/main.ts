@@ -175,13 +175,14 @@ async function answerTrace(){
  try{
   const items=await trace.run(snapshot,signal,item=>{
    if(signal.aborted)return;
+   if(item.status==='error'&&item.error?.startsWith('capture'))void persist('capture-diagnostic.json',{at:new Date().toISOString(),code:item.error,platform:process.platform,electron:process.versions.electron}).catch(()=>{});
    traceItems[item.index]=item;win.webContents.send('trace-item',item);
    // Keep the side panel hidden until every selected region has been captured.
    if(!capturing&&item.status!=="reading")win.show();
   });
   signal.throwIfAborted();
   if(settings.history){history=[...items.filter(i=>i.status==='done').map(i=>({id:crypto.randomUUID(),question:i.question,text:i.text,sources:i.sources,at:new Date().toISOString(),language:(/[\u0900-\u097f]/.test(i.question)?'hi':'en') as 'hi'|'en',web:snapshot.traceSearch&&i.sources.length>0})),...history].slice(0,30);await persist('history.json',history);}
- }catch(e){if(!signal.aborted)win.webContents.send('error',e instanceof WinbotError?e.code:'apiFailure');}
+ }catch(e){if(!signal.aborted){const code=e instanceof WinbotError?e.code:'apiFailure';void persist('capture-diagnostic.json',{at:new Date().toISOString(),code,platform:process.platform,electron:process.versions.electron}).catch(()=>{});win.webContents.send('error',code);}}
  finally{trace.cancel();busy=false;capturing=false;controller=undefined;win.show();emit();}
 }
 const capture = {

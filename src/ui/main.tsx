@@ -32,6 +32,20 @@ declare global {
   }
 }
 const errors: Record<string, [string, string]> = {
+  captureCoordinates: ['Could not convert the selected region to display pixels. [captureCoordinates]', 'स्क्रीन कैप्चर चरण विफल। कोड: captureCoordinates'],
+  captureDisplayChanged: ['The display changed. Open Trace again and reselect the question. [captureDisplayChanged]', 'स्क्रीन कैप्चर चरण विफल। कोड: captureDisplayChanged'],
+  captureWorkerStart: ['The capture worker could not start. [captureWorkerStart]', 'स्क्रीन कैप्चर चरण विफल। कोड: captureWorkerStart'],
+  captureWorkerLoad: ['The capture worker or native library could not load. [captureWorkerLoad]', 'स्क्रीन कैप्चर चरण विफल। कोड: captureWorkerLoad'],
+  captureWorkerExit: ['The capture worker stopped unexpectedly. [captureWorkerExit]', 'स्क्रीन कैप्चर चरण विफल। कोड: captureWorkerExit'],
+  captureTimeout: ['The capture worker timed out. [captureTimeout]', 'स्क्रीन कैप्चर चरण विफल। कोड: captureTimeout'],
+  captureNativeLoad: ['The Windows capture library could not initialize. [captureNativeLoad]', 'स्क्रीन कैप्चर चरण विफल। कोड: captureNativeLoad'],
+  captureNativeDC: ['Windows did not provide a screen device context. [captureNativeDC]', 'स्क्रीन कैप्चर चरण विफल। कोड: captureNativeDC'],
+  captureNativeBitmap: ['Windows could not allocate the selected image. [captureNativeBitmap]', 'स्क्रीन कैप्चर चरण विफल। कोड: captureNativeBitmap'],
+  captureNativeBlit: ['Windows could not copy pixels from the selected region. [captureNativeBlit]', 'स्क्रीन कैप्चर चरण विफल। कोड: captureNativeBlit'],
+  captureNativeRead: ['Windows could not read the selected bitmap. [captureNativeRead]', 'स्क्रीन कैप्चर चरण विफल। कोड: captureNativeRead'],
+  captureTransfer: ['The capture worker could not return image bytes. [captureTransfer]', 'स्क्रीन कैप्चर चरण विफल। कोड: captureTransfer'],
+  captureDecode: ['The captured image could not be decoded. [captureDecode]', 'स्क्रीन कैप्चर चरण विफल। कोड: captureDecode'],
+
   traceUnsupported: ["Region capture is unavailable on this platform. Linux Trace requires X11.","इस प्लेटफॉर्म पर क्षेत्र कैप्चर उपलब्ध नहीं। Linux पर X11 चाहिए।"],
   traceRegions: ["Select 1–8 complete questions, including all options.","सभी विकल्पों सहित 1–8 पूरे प्रश्न चुनें।"],
   consent: [
@@ -63,8 +77,8 @@ const errors: Record<string, [string, string]> = {
     "OCR विफल हुआ। भाषा मॉडल जाँचें और फिर प्रयास करें।",
   ],
   capture: [
-    "Screen capture unavailable. Check OS screen permissions.",
-    "स्क्रीन कैप्चर उपलब्ध नहीं। सिस्टम की अनुमति जाँचें।",
+    "Screen capture failed. Retry after opening the screen you want to capture.",
+    "स्क्रीन कैप्चर विफल हुआ। इच्छित स्क्रीन खोलकर फिर कोशिश करें।",
   ],
   hotkey: [
     "That shortcut is invalid or already in use. Choose another.",
