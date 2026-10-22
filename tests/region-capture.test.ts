@@ -8,7 +8,7 @@ vi.mock('node:worker_threads',()=>({Worker:class{
  terminate=mock.terminate;
 }}));
 vi.mock('electron',()=>{
- const image={isEmpty:()=>false,getSize:()=>({width:16,height:12}),toPNG:()=>Buffer.from('png')};
+ const image:any={resize:vi.fn(()=>image),isEmpty:()=>false,getSize:()=>({width:16,height:12}),toPNG:()=>Buffer.from('png')};
  return {screen:{dipToScreenRect:(_:unknown,rect:unknown)=>rect},nativeImage:{
  createFromBitmap:(bytes:Buffer,size:unknown)=>{mock.bitmap(Buffer.from(bytes),size);return image;},
  createFromBuffer:(bytes:Buffer)=>{mock.encoded(Buffer.from(bytes));return image;},

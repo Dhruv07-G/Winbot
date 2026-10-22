@@ -1,6 +1,14 @@
-import { createWorker } from 'tesseract.js';
+import { createWorker, PSM } from 'tesseract.js';
 import { WinbotError } from '../core/model';
-import type { TraceOCRProvider } from '../core/trace';
+import { parseMCQ, type TraceOCRProvider } from '../core/trace';
+// Known OCR punctuation artifact: C) can be emitted as CQ). Retain the
+// observed C, and accept cleanup only when all four A/B/C/D labels are present.
+export function cleanOCRChoices(text:string){
+  if(parseMCQ(text).complete)return text;
+  const candidate=text.replace(/^(\s*)CQ\)(?=\s)/gm,'$1C)');
+  const parsed=parseMCQ(candidate);
+  return parsed.complete&&parsed.choices.length===4&&parsed.choices.map(c=>c.label).join('')==='ABCD'?candidate:text;
+}
 /** Batch-scoped pool: warm while tracing, parallel OCR, destroy image memory at batch end. */
 export class TraceOCR implements TraceOCRProvider {
   private workers:Promise<Awaited<ReturnType<typeof createWorker>>>[]=[];
@@ -16,8 +24,27 @@ export class TraceOCR implements TraceOCRProvider {
     const job=this.tails[index].catch(()=>{}).then(async()=>{
       signal.throwIfAborted();const worker=await this.workers[index];signal.throwIfAborted();
       const abort=()=>{void worker.terminate().catch(()=>{});};signal.addEventListener('abort',abort,{once:true});
-      try {const result=await worker.recognize(Buffer.from(image));signal.throwIfAborted();return result.data.text;}
-      finally{signal.removeEventListener('abort',abort);}
+      let englishOnly=false;
+      try {
+        await worker.setParameters({tessedit_pageseg_mode:PSM.AUTO});
+        const result=await worker.recognize(Buffer.from(image));signal.throwIfAborted();
+        const first=cleanOCRChoices(result.data.text),choices=parseMCQ(first);
+        if(first.trim()&&(!choices.detected||choices.complete))return first;
+        // Re-read pixels, never infer a missing label from its position.
+        try{
+          if(!/[\u0900-\u097f]/.test(first)){englishOnly=true;await worker.reinitialize('eng');}
+          signal.throwIfAborted();
+          await worker.setParameters({tessedit_pageseg_mode:PSM.SPARSE_TEXT});
+          const retry=await worker.recognize(Buffer.from(image));signal.throwIfAborted();
+          const second=cleanOCRChoices(retry.data.text);
+          if(parseMCQ(second).complete||(!first.trim()&&second.trim()))return second;
+          return first;
+        }catch(error){if(signal.aborted)throw error;return first;}
+      }
+      finally{
+        signal.removeEventListener('abort',abort);
+        if(englishOnly&&!signal.aborted)await worker.reinitialize('eng+hin');
+      }
     });this.tails[index]=job;
     try{return await job;}catch(e){if(signal.aborted)throw e;throw new WinbotError('ocrFailure');}
   }

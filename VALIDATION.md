@@ -64,3 +64,10 @@ Validation: 43 regression tests passed, plus one visual-preview fixture. TypeScr
 User reports capture failure after drawing a Trace region, including after restart. Root cause remains unconfirmed. Installed Koffi loads, and the installed worker passed synthetic memory-bitmap copy/read/transfer in the packaged Electron 44.7.2 runtime (scripts/test-native-capture.cjs). This test never copies desktop pixels and does not prove real screen capture works.
 
 Replaced the generic permission advice with distinct capture-stage error codes. Trace failures save only timestamp, code, platform, and Electron version to userData/capture-diagnostic.json; no questions, images, or API credentials are included. Existing 68 tests passed, followed by 5 region tests including 3 new native-stage propagation cases. Type checking, renderer build and desktop build passed. Installed main and worker SHA256 hashes match. Awaiting user's live diagnostic code before claiming a root-cause fix.
+
+
+### OCR option-label recovery — 2026-10-22
+
+The user's successful capture stored the complete organelle question, but OCR misread C) as (0. The conservative MCQ validator therefore returned Unclear. Updated region preprocessing to enlarge small text up to 2×, added sparse-layout OCR retry (English-only when no Devanagari was detected), and restored bilingual OCR for subsequent work. A real synthetic image reproduced CQ) for C); a narrow cleanup retains the observed C only when all four A/B/C/D labels form a complete sequence. Missing labels remain rejected.
+
+TypeScript and desktop build passed. 77 tests passed in 10 files, including retry, no invented missing labels, complete-MCQ fast path, Hindi retry, cancellation, and CQ) cleanup. Actual local Tesseract OCR recovered all four correct labels on a synthetic dark-background organelle-question image in 1225 ms. This is an OCR measurement, not an end-to-end latency guarantee or verification of the user's original image. No screenshots were stored or sent for this test. Portable main bundle copied and hash-verified; requires a full app restart to load it.

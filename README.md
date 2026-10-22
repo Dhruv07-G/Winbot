@@ -111,3 +111,9 @@ Grant screen consent in the side panel, then click **Trace & Answer** or press *
 The transparent overlay closes before capture. A native worker captures only each requested rectangle in memory; images are resized to at most 1800 pixels on the longest side. Up to three OCR workers run concurrently, followed by parallel streamed model requests. Identical text/settings/model requests share a two-minute memory cache (maximum 50 results), cleared with Clear all. No screenshot files are created. Timing logs cover capture, OCR, search, first token, model completion, and display-ready. Two-second answers are a target, not a guarantee; cold OCR/model and network latency can take longer.
 
 Windows uses GDI region capture. macOS uses CoreGraphics (OS screen permission required; this adapter needs device testing and migration to ScreenCaptureKit). Linux uses X11; Wayland currently reports an unsupported message. Multi-monitor sessions currently select one monitor at a time. Native capture and end-to-end timing require manual verification on each OS.
+
+
+### Trace OCR recovery
+Small selected images are enlarged up to 2× before OCR (longest side remains capped at 1800 pixels). If the first read is empty or has an incomplete MCQ label sequence, Winbot rereads the same in-memory image with sparse-text layout. English questions use an English-only retry; Hindi questions retain bilingual OCR. Labels are never filled in from their positions: if the retry still cannot read every option, retrace at a larger text size.
+
+The OCR cleanup also handles the reproduced `CQ)` punctuation artifact as `C)` only when the observed labels form a complete four-option A/B/C/D sequence. It does not convert unreadable `(0` into C by position.
