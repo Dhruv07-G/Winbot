@@ -24,6 +24,7 @@ import {
   recommendations,
 } from "../core/model";
 import { TraceSession } from "./trace-session";
+import { trustWindowsCertificates } from "./trust";
 import { TraceItem } from "../core/trace";
 import { Pipeline } from "../core/pipeline";
 import { ConsentGate } from "../core/consent";
@@ -380,6 +381,11 @@ if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on("second-instance", () => win?.show());
   app.whenReady().then(async () => {
+    try {
+      trustWindowsCertificates();
+    } catch {
+      console.warn("winbot:event", "systemCa");
+    }
     const userEnv=file(".env");
     const envPath=app.isPackaged
       ? (existsSync(userEnv)?userEnv:path.join(path.dirname(app.getPath("exe")),".env"))

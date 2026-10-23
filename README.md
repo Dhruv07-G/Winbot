@@ -117,3 +117,5 @@ Windows uses GDI region capture. macOS uses CoreGraphics (OS screen permission r
 Small selected images are enlarged up to 2× before OCR (longest side remains capped at 1800 pixels). If the first read is empty or has an incomplete MCQ label sequence, Winbot rereads the same in-memory image with sparse-text layout. English questions use an English-only retry; Hindi questions retain bilingual OCR. Labels are never filled in from their positions: if the retry still cannot read every option, retrace at a larger text size.
 
 The OCR cleanup also handles the reproduced `CQ)` punctuation artifact as `C)` only when the observed labels form a complete four-option A/B/C/D sequence. It does not convert unreadable `(0` into C by position.
+
+For a live regression without desktop capture, run `node scripts/test-trace-live.mjs`. It reads a synthetic MCQ image, runs local OCR, then makes one request to your configured AI provider and checks the streamed answer. It uses API quota and prints only stage timings and the final answer. On Windows, the app includes Windows-trusted root certificates for provider connections while retaining Node's default roots and TLS verification.
