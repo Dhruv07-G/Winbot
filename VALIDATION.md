@@ -77,3 +77,10 @@ TypeScript and desktop build passed. 77 tests passed in 10 files, including retr
 An opt-in regression now reads a synthetic organelle MCQ fixture and exercises the Trace capture interface, local OCR, streaming Gemini response, and answer formatter. The configured provider returned `Q1: C) Mitochondrion`; the run completed in 2.7 seconds, including about 1.1 seconds for OCR and 1.6 seconds for the model. Search was disabled for this test. It does not capture the desktop or prove performance of live selection.
 
 The first provider attempt failed with Node's `UNABLE_TO_VERIFY_LEAF_SIGNATURE`. Including Windows-trusted roots alongside Node's default roots resolved the connection without disabling TLS verification. The same trust setup now runs at desktop startup. A full application restart is required after updating the portable main bundle. The user's live Trace selection still needs an on-screen acceptance test.
+
+
+### Live Windows Trace acceptance — 2026-10-25
+
+With explicit on-screen consent, the installed portable app was tested against two different Notepad MCQs. Ctrl+Shift+T opened the overlay, a rectangle selected the full question and four options, native region capture and OCR completed, and the result cards showed Q1: C) Mitochondrion in 2.2 seconds and Q1: B) Carbon dioxide in 3.8 seconds. The second answer was fresh rather than reused from the first. The saved text-only history for the second test contained every option label and the correct detected question; no screenshot was saved.
+
+The test exposed a usability fault: the fixed upper-left Trace controls obscured questions at the top of the screen. The controls now start at the upper-right and have a draggable Move handle. Unclear results open the detected text automatically; empty OCR results explain how to retrace. The updated renderer build and unit suite passed. The new toolbar position was visually verified in the installed overlay, but the drag gesture itself still needs a manual acceptance check because the Windows automation session detected competing user input.

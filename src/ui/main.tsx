@@ -309,7 +309,9 @@ function App() {
                 {state.traceItems.filter(Boolean).map(item=><article key={item.index}>
                   <strong>Q{item.index+1}</strong> <small>{item.status==='cancelled'?t("Cancelled","रद्द किया गया"):item.status==='done'?t("Complete","पूरा"):item.status==='error'?t("Could not answer","उत्तर नहीं मिला"):item.status==='reading'?t("Reading region…","चुना भाग पढ़ रहे हैं…"):item.status==='searching'?t("Searching…","खोज रहे हैं…"):t("Answering…","उत्तर आ रहा है…")}{item.cached?t(" · cached"," · कैश से"):''}{item.ms?" · "+(item.ms/1000).toFixed(1)+"s":''}</small>
                   {item.status==='error'?<p role="alert">{(errors[item.error||'apiFailure']||errors.apiFailure)[hindi?1:0]}</p>:item.text&&<AnswerContent text={item.text}/>}
-                  {item.question&&<details><summary>{t("Detected text","पहचाना गया पाठ")}</summary><p>{item.question}</p></details>}
+                  {item.question
+                    ? <details open={item.status==='done'&&(item.text.includes('Unclear')||item.text.includes('अस्पष्ट'))}><summary>{t("Detected text","पहचाना गया पाठ")}</summary><p>{item.question}</p></details>
+                    : item.status==='done'&&<p className="trace-hint">{t("No text was recognized. Trace a larger region around the complete question and options.","कोई पाठ नहीं पहचाना गया। पूरे प्रश्न और विकल्पों के आसपास बड़ा भाग चुनें।")}</p>}
                   {s.sources&&item.sources.length>0&&<div className="sources">{item.sources.map((source,i)=><button key={i} onClick={()=>command('link',source.url)}>{i+1}. {source.title}</button>)}</div>}
                 </article>)}
               </section>}

@@ -8,7 +8,14 @@ const api=(window as any).winbot;
 function Overlay(){
  const [settings,setSettings]=useState<Settings>(defaults),[strokes,setStrokes]=useState<Stroke[]>([]),[current,setCurrent]=useState<Stroke>(),[freehand,setFreehand]=useState(false),[error,setError]=useState(''),[submitting,setSubmitting]=useState(false);
  const [editing,setEditing]=useState<number|null>(null);
+ const [toolbarPos,setToolbarPos]=useState({x:Math.max(12,innerWidth-960),y:12});
+ const toolbar=useRef<HTMLDivElement>(null),moving=useRef<{id:number;pointerX:number;pointerY:number;x:number;y:number}|null>(null);
  const active=useRef<Stroke|null>(null),selected=useRef<Stroke[]>([]);const hi=languageOf(settings,'',navigator.language)==='hi',t=(en:string,h:string)=>hi?h:en;
+ const boundToolbar=(x:number,y:number)=>({x:Math.max(0,Math.min(x,innerWidth-(toolbar.current?.offsetWidth||0))),y:Math.max(0,Math.min(y,innerHeight-(toolbar.current?.offsetHeight||0)))});
+ useEffect(()=>{const fit=()=>setToolbarPos(p=>boundToolbar(p.x,p.y));window.addEventListener('resize',fit);fit();return()=>window.removeEventListener('resize',fit);},[strokes.length,editing]);
+ function moveDown(e:React.PointerEvent<HTMLButtonElement>){e.preventDefault();e.stopPropagation();e.currentTarget.setPointerCapture(e.pointerId);moving.current={id:e.pointerId,pointerX:e.clientX,pointerY:e.clientY,...toolbarPos};}
+ function moveDrag(e:React.PointerEvent<HTMLButtonElement>){const start=moving.current;if(!start||start.id!==e.pointerId)return;e.preventDefault();setToolbarPos(boundToolbar(start.x+e.clientX-start.pointerX,start.y+e.clientY-start.pointerY));}
+ function moveEnd(e:React.PointerEvent<HTMLButtonElement>){if(moving.current?.id===e.pointerId)moving.current=null;}
  useEffect(()=>{api.command('trace-get').then((r:any)=>{if(r.ok)setSettings(r.state.settings);});
  const remove=api.on('trace-submit-request',()=>void submit());return remove;},[]);
  const sync=(next:Stroke[])=>{selected.current=next;setStrokes(next);void api.command('trace-select',next.map(s=>s.region));};
@@ -26,14 +33,15 @@ function Overlay(){
     <text x={s.region.x+5} y={s.region.y+21} fill="white" stroke="#102030" strokeWidth="3" paintOrder="stroke" fontSize="17">Q{i+1}</text>
    </g>)}
   </svg>
-  <div className="trace-tools" role="toolbar" aria-label="Trace controls">
-   <strong>{t('Trace & Answer','चुनें और उत्तर पाएँ')}</strong><span className="trace-count">{strokes.length} {t('questions selected','प्रश्न चुने गए')} / 8</span>
+  <div ref={toolbar} className="trace-tools" role="toolbar" aria-label="Trace controls" style={{left:toolbarPos.x,top:toolbarPos.y}}>
+   <strong>{t('Trace & Answer','चुनें और उत्तर पाएँ')}</strong><span className="trace-count">{strokes.length} {t(strokes.length===1?'question selected':'questions selected','प्रश्न चुने गए')} / 8</span>
+   <button className="trace-move" aria-label={t('Move Trace toolbar','ट्रेस बार खिसकाएँ')} title={t('Drag to uncover a question','प्रश्न दिखाने के लिए खींचें')} onPointerDown={moveDown} onPointerMove={moveDrag} onPointerUp={moveEnd} onPointerCancel={moveEnd}>{t('Move','खिसकाएँ')} ↔</button>
    <button className={!freehand?'chosen':''} onClick={()=>setFreehand(false)}>{t('Rectangle','आयत')}</button><button className={freehand?'chosen':''} onClick={()=>setFreehand(true)}>{t('Freehand','फ्रीहैंड')}</button>
    <button disabled={!strokes.length||submitting} onClick={()=>(setEditing(null),sync(selected.current.slice(0,-1)))}>{t('Undo','पूर्ववत')}</button>
    <button disabled={!strokes.length||submitting} onClick={()=>{setEditing(null);sync([]);}}>{t('Clear','हटाएँ')}</button>
    <button className="answer-button" disabled={!strokes.length||submitting} onClick={()=>void submit()}>{t('Answer','उत्तर')} ↵</button>
    <button onClick={()=>api.command('trace-cancel')}>{t('Cancel','रद्द करें')} Esc</button>
-   <small>{t('Include each entire question and all its options. Each rectangle or stroke is one question; freehand captures its blue bounding box. Enter answers all selections.','हर प्रश्न और उसके सभी विकल्प शामिल करें। हर आयत या स्ट्रोक एक प्रश्न है। Enter से सभी उत्तर पाएँ।')}</small>
+   <small>{t('Include each entire question and all its options. Drag Move if this bar covers text. Enter answers all selections.','पूरा प्रश्न और सभी विकल्प चुनें। बार पाठ को ढके तो खिसकाएँ। Enter से उत्तर पाएँ।')}</small>
    {strokes.length>0&&<div className="trace-remove">{strokes.map((_,i)=><span key={i}><button aria-label={`Remove Q${i+1}`} onClick={()=>{setEditing(null);sync(selected.current.filter((_,n)=>n!==i));}}>Q{i+1} ×</button><button className={editing===i?"chosen":""} onClick={()=>setEditing(i)}>{t("Redraw", "फिर चुनें")} Q{i+1}</button></span>)}</div>}
    {editing!==null&&<small>{t("Draw a replacement for", "फिर से चुनें")} Q{editing+1}</small>}
    {error&&<small role="alert">{error}</small>}

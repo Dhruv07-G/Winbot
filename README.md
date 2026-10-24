@@ -100,7 +100,7 @@ Screen-derived MCQ answers give the answer text without an option letter because
 
 ## Trace & Answer
 
-Grant screen consent in the side panel, then click **Trace & Answer** or press **Ctrl+Shift+T** (macOS: Cmd+Shift+T). Draw rectangles or freehand strokes around complete questions and every option. Each stroke captures its rectangular bounding box. Select up to eight questions on the monitor containing the pointer.
+Grant screen consent in the side panel, then click **Trace & Answer** or press **Ctrl+Shift+T** (macOS: Cmd+Shift+T). Draw rectangles or freehand strokes around complete questions and every option. Each stroke captures its rectangular bounding box. Select up to eight questions on the monitor containing the pointer. The controls start at the upper-right; drag **Move** if they cover any text. When recognition is unclear, expand **Detected text** to see what OCR read and retrace a larger region.
 
 - **Redraw Qn** replaces that region while keeping its question number. **Qn ×** removes it; **Undo** / Ctrl+Z removes the last region; **Clear** removes all selections.
 - **Enter**, **Answer**, or the trace hotkey submits all selections. **Esc** cancels selection without capturing. **Cancel batch**, switching Answer Mode off, or revoking consent aborts pending work; unfinished cards become Cancelled and late results are ignored.
