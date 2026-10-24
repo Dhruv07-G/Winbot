@@ -30,20 +30,20 @@ function Overlay(){
    {[...strokes,...(current?[current]:[])].map((s,i)=><g key={i}>
     <rect x={s.region.x} y={s.region.y} width={s.region.width} height={s.region.height} fill="rgba(35,136,255,.08)" stroke={settings.traceColor} strokeWidth={settings.traceThickness} strokeDasharray={s.freehand?'6 3':undefined}/>
     {s.freehand&&<polyline points={s.points.map(p=>`${p.x},${p.y}`).join(' ')} fill="none" stroke={settings.traceColor} strokeWidth={settings.traceThickness}/>}
-    <text x={s.region.x+5} y={s.region.y+21} fill="white" stroke="#102030" strokeWidth="3" paintOrder="stroke" fontSize="17">Q{i+1}</text>
+    <text x={s.region.x+5} y={s.region.y+21} fill="white" stroke="#102030" strokeWidth="3" paintOrder="stroke" fontSize="17">R{i+1}</text>
    </g>)}
   </svg>
   <div ref={toolbar} className="trace-tools" role="toolbar" aria-label="Trace controls" style={{left:toolbarPos.x,top:toolbarPos.y}}>
-   <strong>{t('Trace & Answer','चुनें और उत्तर पाएँ')}</strong><span className="trace-count">{strokes.length} {t(strokes.length===1?'question selected':'questions selected','प्रश्न चुने गए')} / 8</span>
+   <strong>{t('Trace & Answer','चुनें और उत्तर पाएँ')}</strong><span className="trace-count">{strokes.length} {t(strokes.length===1?'region selected':'regions selected','क्षेत्र चुने गए')} / 8</span>
    <button className="trace-move" aria-label={t('Move Trace toolbar','ट्रेस बार खिसकाएँ')} title={t('Drag to uncover a question','प्रश्न दिखाने के लिए खींचें')} onPointerDown={moveDown} onPointerMove={moveDrag} onPointerUp={moveEnd} onPointerCancel={moveEnd}>{t('Move','खिसकाएँ')} ↔</button>
    <button className={!freehand?'chosen':''} onClick={()=>setFreehand(false)}>{t('Rectangle','आयत')}</button><button className={freehand?'chosen':''} onClick={()=>setFreehand(true)}>{t('Freehand','फ्रीहैंड')}</button>
    <button disabled={!strokes.length||submitting} onClick={()=>(setEditing(null),sync(selected.current.slice(0,-1)))}>{t('Undo','पूर्ववत')}</button>
    <button disabled={!strokes.length||submitting} onClick={()=>{setEditing(null);sync([]);}}>{t('Clear','हटाएँ')}</button>
    <button className="answer-button" disabled={!strokes.length||submitting} onClick={()=>void submit()}>{t('Answer','उत्तर')} ↵</button>
    <button onClick={()=>api.command('trace-cancel')}>{t('Cancel','रद्द करें')} Esc</button>
-   <small>{t('Include each entire question and all its options. Drag Move if this bar covers text. Enter answers all selections.','पूरा प्रश्न और सभी विकल्प चुनें। बार पाठ को ढके तो खिसकाएँ। Enter से उत्तर पाएँ।')}</small>
-   {strokes.length>0&&<div className="trace-remove">{strokes.map((_,i)=><span key={i}><button aria-label={`Remove Q${i+1}`} onClick={()=>{setEditing(null);sync(selected.current.filter((_,n)=>n!==i));}}>Q{i+1} ×</button><button className={editing===i?"chosen":""} onClick={()=>setEditing(i)}>{t("Redraw", "फिर चुनें")} Q{i+1}</button></span>)}</div>}
-   {editing!==null&&<small>{t("Draw a replacement for", "फिर से चुनें")} Q{editing+1}</small>}
+   <small>{t('Include each full question and its options. Separate regions work best; numbered questions in one region are also split. Press Enter to answer.','हर प्रश्न और उसके विकल्प पूरे चुनें। अलग क्षेत्र बेहतर हैं; एक क्षेत्र में क्रमांकित प्रश्न भी अलग होंगे। Enter से उत्तर पाएँ।')}</small>
+   {strokes.length>0&&<div className="trace-remove">{strokes.map((_,i)=><span key={i}><button aria-label={`Remove region ${i+1}`} onClick={()=>{setEditing(null);sync(selected.current.filter((_,n)=>n!==i));}}>R{i+1} ×</button><button className={editing===i?"chosen":""} onClick={()=>setEditing(i)}>{t("Redraw", "फिर चुनें")} R{i+1}</button></span>)}</div>}
+   {editing!==null&&<small>{t("Draw a replacement for", "फिर से चुनें")} R{editing+1}</small>}
    {error&&<small role="alert">{error}</small>}
   </div>
  </div>;

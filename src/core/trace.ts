@@ -5,6 +5,13 @@ export type Region = z.infer<typeof regionSchema>;
 export type Choice = {label:string; text:string};
 export type MCQ = {detected:boolean; complete:boolean; choices:Choice[]};
 export type TraceItem = {index:number; question:string; text:string; status:"reading"|"searching"|"answering"|"streaming"|"done"|"error"|"cancelled"; sources:Source[]; error?:string; cached?:boolean; ms?:number};
+/** Split explicit consecutive question numbers found within one traced selection. */
+export function splitTraceQuestions(text:string):string[] {
+  const headings=[...text.matchAll(/^[ \t]*Q(?:uestion)?[ \t]*(\d{1,2})[.):\-][ \t]*/gim)];
+  if(headings.length<2||headings.length>8||headings.some((heading,i)=>i>0&&Number(heading[1])!==Number(headings[i-1][1])+1))return [text];
+  const parts=headings.map((heading,i)=>text.slice(heading.index!,i+1<headings.length?headings[i+1].index:text.length).trim());
+  return parts.every(part=>part.length>0)?parts:[text];
+}
 export function parseMCQ(text:string): MCQ {
   const letters = /(?:^|\n|\s{1,})(\([a-hA-H]\)|[a-hA-H][.)])\s+([^]*?)(?=(?:\s+(?:\([a-hA-H]\)|[a-hA-H][.)])\s+)|$)/g;
   const numbered = /(?:^|\n)\s*(\((?:[1-9]|i{1,3}|iv|v|vi{1,3})\)|(?:[1-9]|i{1,3}|iv|v|vi{1,3})[.)])\s+([^]*?)(?=\n\s*(?:\((?:[1-9]|i{1,3}|iv|v|vi{1,3})\)|(?:[1-9]|i{1,3}|iv|v|vi{1,3})[.)])\s+|$)/gi;
@@ -42,37 +49,79 @@ export class TracePipeline {
     const items=regions.map((_,index):TraceItem=>({index,question:'',text:'',status:'reading',sources:[]}));
     items.forEach(emit);
     const measure=(index:number,stage:string,at:number)=>console.info('winbot:timing',JSON.stringify({q:index+1,stage,ms:Math.round(performance.now()-at)}));
-    try{return await Promise.all(regions.map(async(region,index)=>{
-      const item=items[index];const update=(patch:Partial<TraceItem>)=>{if(!signal.aborted){Object.assign(item,patch);emit({...item});}};
-      let image:Uint8Array|undefined;
+    const answerQuestion=async(item:TraceItem,index:number):Promise<TraceItem>=>{
+      const update=(patch:Partial<TraceItem>)=>{if(!signal.aborted){Object.assign(item,patch);emit({...item});}};
       try{
-        signal.throwIfAborted();let at=performance.now();
-        image=await this.p.capture.capture(region,signal);measure(index,'capture',at);
-        signal.throwIfAborted();at=performance.now();
-        item.question=(await this.p.ocr.extract(image,signal)).trim().slice(0,10000);measure(index,'ocr',at);
-        image.fill(0);image=undefined;signal.throwIfAborted();
-        const language=languageOf(settings,item.question);const mcq=parseMCQ(item.question);
-        if(!item.question||mcq.detected&&!mcq.complete){update({status:'done',text:`Q${index+1}: ${unclear(language)}`,ms:Math.round(performance.now()-start)});return item;}
+        signal.throwIfAborted();
+        const language=languageOf(settings,item.question),mcq=parseMCQ(item.question);
+        if(!item.question||mcq.detected&&!mcq.complete){
+          update({status:'done',text:'Q'+(index+1)+': '+unclear(language),ms:Math.round(performance.now()-start)});
+          return item;
+        }
         const key=JSON.stringify([item.question.replace(/\s+/g,' '),settings.traceSearch,settings.traceMCQStyle,settings.traceTextStyle,language,this.p.llm.identity(settings)]);
         const saved=this.cache.get(key);
         let value:{result:any;sources:Source[]};
         if(saved&&Date.now()-saved.at<120000){value=saved;item.cached=true;}
         else{
           let job=pending.get(key);
-          if(!job){job=(async()=>{
-            update({status:settings.traceSearch?'searching':'answering'});at=performance.now();
-            const sources=settings.traceSearch?await this.p.search.search(item.question,language,signal):[];measure(index,'search',at);
-            signal.throwIfAborted();update({status:'answering',sources});at=performance.now();let first=true;
-            const result=await this.p.llm.answerTrace(item.question,mcq,sources,settings,language,signal,partial=>{if(first){measure(index,'first-token',at);first=false;}update({status:'streaming',text:formatTrace(index,mcq,partial,settings,language)});});
-            measure(index,'llm',at);signal.throwIfAborted();
-            const completed={result,sources};if(!result.unclear){this.cache.set(key,{...completed,at:Date.now()});while(this.cache.size>50)this.cache.delete(this.cache.keys().next().value!);}return completed;
-          })();pending.set(key,job);}
+          if(!job){
+            job=(async()=>{
+              update({status:settings.traceSearch?'searching':'answering'});
+              let at=performance.now();
+              const sources=settings.traceSearch?await this.p.search.search(item.question,language,signal):[];
+              measure(index,'search',at);
+              signal.throwIfAborted();update({status:'answering',sources});
+              at=performance.now();let first=true;
+              const result=await this.p.llm.answerTrace(item.question,mcq,sources,settings,language,signal,partial=>{
+                if(first){measure(index,'first-token',at);first=false;}
+                update({status:'streaming',text:formatTrace(index,mcq,partial,settings,language)});
+              });
+              measure(index,'llm',at);signal.throwIfAborted();
+              const completed={result,sources};
+              if(!result.unclear){
+                this.cache.set(key,{...completed,at:Date.now()});
+                while(this.cache.size>50)this.cache.delete(this.cache.keys().next().value!);
+              }
+              return completed;
+            })();
+            pending.set(key,job);
+          }
           value=await job;
         }
-        signal.throwIfAborted();update({status:'done',sources:value.sources,text:formatTrace(index,mcq,value.result,settings,language),ms:Math.round(performance.now()-start)});measure(index,'display-ready',start);
-      }catch(error){if(!signal.aborted)update({status:'error',error:error instanceof WinbotError?error.code:'apiFailure',text:''});}
-      finally{image?.fill(0);}
+        signal.throwIfAborted();
+        update({status:'done',sources:value.sources,text:formatTrace(index,mcq,value.result,settings,language),ms:Math.round(performance.now()-start)});
+        measure(index,'display-ready',start);
+      }catch(error){
+        if(!signal.aborted)update({status:'error',error:error instanceof WinbotError?error.code:'apiFailure',text:''});
+      }
       return item;
-    }));}finally{await this.p.ocr.close();}
+    };
+    try{
+      const batches=await Promise.all(regions.map(async(region,index):Promise<TraceItem[]>=>{
+        const item=items[index];
+        const update=(patch:Partial<TraceItem>)=>{if(!signal.aborted){Object.assign(item,patch);emit({...item});}};
+        let image:Uint8Array|undefined;
+        try{
+          signal.throwIfAborted();let at=performance.now();
+          image=await this.p.capture.capture(region,signal);measure(index,'capture',at);
+          signal.throwIfAborted();at=performance.now();
+          const question=(await this.p.ocr.extract(image,signal)).trim().slice(0,10000);measure(index,'ocr',at);
+          image.fill(0);image=undefined;signal.throwIfAborted();
+          // A single rectangle may contain several numbered questions. Preserve
+          // multi-region streaming, where later regions can finish before earlier ones.
+          const questions=regions.length===1?splitTraceQuestions(question):[question];
+          item.question=questions[0];
+          if(questions.length===1)return [await answerQuestion(item,index)];
+          const expanded=questions.map((q,i):TraceItem=>i===0?item:{index:i,question:q,text:'',status:'reading',sources:[]});
+          expanded.slice(1).forEach(emit);
+          console.info('winbot:timing',JSON.stringify({stage:'split-questions',count:expanded.length}));
+          return await Promise.all(expanded.map((entry,i)=>answerQuestion(entry,i)));
+        }catch(error){
+          if(!signal.aborted)update({status:'error',error:error instanceof WinbotError?error.code:'apiFailure',text:''});
+          return [item];
+        }finally{image?.fill(0);}
+      }));
+      return batches.flat();
+    }finally{await this.p.ocr.close();}
   }
 }

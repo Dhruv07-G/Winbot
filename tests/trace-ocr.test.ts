@@ -14,6 +14,22 @@ it('re-reads ambiguous option labels instead of inventing the missing C',async()
  expect(mocks.setParameters).toHaveBeenLastCalledWith({tessedit_pageseg_mode:'11'});
  expect(mocks.reinitialize.mock.calls).toEqual([['eng'],['eng+hin']]);await ocr.close();
 });
+it('retries incomplete choices per question in a numbered batch',async()=>{
+ const first=[
+  'Q1. Planet?','A) Venus','B) Mercury','C) Mars','D) Earth','',
+  'Q2. Calculation?','A) 24','B) 30','(0) 36','D) 40','',
+  'Q3. Cell?','A) Ribosome','B) Nucleus','() Lysosome','D) Membrane'
+ ].join('\n');
+ const second=first.replace('(0) 36','C) 36').replace('() Lysosome','C) Lysosome');
+ mocks.recognize.mockResolvedValueOnce({data:{text:first}}).mockResolvedValueOnce({data:{text:second}});
+ const ocr=new TraceOCR();ocr.warm(1);
+ const text=await ocr.extract(new Uint8Array([1]),new AbortController().signal);
+ expect(text).toContain('Q1. Planet?');
+ expect(text).toContain('C) 36');
+ expect(text).toContain('C) Lysosome');
+ expect(mocks.recognize).toHaveBeenCalledTimes(2);
+ await ocr.close();
+});
 it('retains unclear text when a second reading still misses a label',async()=>{
  mocks.recognize.mockResolvedValue({data:{text:broken}});const ocr=new TraceOCR();ocr.warm(1);
  const text=await ocr.extract(new Uint8Array([1]),new AbortController().signal);

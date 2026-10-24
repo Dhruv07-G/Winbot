@@ -1,6 +1,6 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {defaults,settingsSchema,WinbotError} from '../src/core/model';
-import {parseMCQ,formatTrace,TracePipeline,TraceItem} from '../src/core/trace';
+import {parseMCQ,splitTraceQuestions,formatTrace,TracePipeline,TraceItem} from '../src/core/trace';
 import {TraceLLM} from '../src/providers/trace-llm';
 const question='Which ocean is largest?\nA. Atlantic\nB. Indian\nC. Pacific\nD. Arctic';
 const settings={...defaults,traceSearch:false};
@@ -26,7 +26,7 @@ it('migrates old settings and validates overlay preferences',()=>{
 });
 function fixture(){
  const buffers:Uint8Array[]=[];let n=0;
- const providers={capture:{capture:vi.fn(async()=>{const b=new Uint8Array([++n]);buffers.push(b);return b;})},ocr:{extract:vi.fn(async()=>question),close:vi.fn(async()=>{})},search:{search:vi.fn(async()=>[])},llm:{identity:()=> 'test-model',answerTrace:vi.fn(async()=>({unclear:false,label:'C',answer:'',reason:''}))}};
+ const providers={capture:{capture:vi.fn(async()=>{const b=new Uint8Array([++n]);buffers.push(b);return b;})},ocr:{extract:vi.fn(async()=>question),close:vi.fn(async()=>{})},search:{search:vi.fn(async()=>[])},llm:{identity:()=> 'test-model',answerTrace:vi.fn(async(_question:string)=>({unclear:false,label:'C',answer:'',reason:''}))}};
  return {providers,buffers,pipeline:new TracePipeline(providers)};
 }
 const regions=[{x:0,y:0,width:100,height:100},{x:100,y:0,width:100,height:100}];
@@ -38,6 +38,46 @@ it('starts regions concurrently, publishes out of order but keeps Q numbers',asy
  await vi.waitFor(()=>expect(events.some(i=>i.index===1&&i.status==='done')).toBe(true));
  expect(providers.capture.capture).toHaveBeenCalledTimes(2);release();const result=await run;
  expect(result.map(i=>i.index)).toEqual([0,1]);expect(result[1].text).toBe('Q2: C) Pacific');expect(buffers.every(b=>b.every(v=>v===0))).toBe(true);expect(providers.ocr.close).toHaveBeenCalled();
+});
+const threeQuestions=[
+ 'Q1. Which planet has the shortest year?','A) Venus','B) Mercury','C) Mars','D) Earth','',
+ 'Q2. What is 15% of 240?','A) 24','B) 30','C) 36','D) 40','',
+ "Q3. Which cell structure contains most of a human cell's DNA?",'A) Ribosome','B) Nucleus','C) Lysosome','D) Cell membrane'
+].join('\n');
+it('splits numbered questions in one traced rectangle and answers them concurrently',async()=>{
+ const {pipeline,providers,buffers}=fixture();
+ providers.ocr.extract.mockResolvedValue(threeQuestions);
+ let release!:()=>void;
+ const first=new Promise<void>(resolve=>release=resolve);
+ providers.llm.answerTrace.mockImplementation(async(q:string)=>{
+   if(q.includes('planet'))await first;
+   return {unclear:false,label:q.includes('planet')?'B':q.includes('15%')?'C':'B',answer:'',reason:''};
+ });
+ const events:TraceItem[]=[];
+ const run=pipeline.run([regions[0]],settings,new AbortController().signal,i=>events.push({...i}));
+ await vi.waitFor(()=>expect(events.filter(i=>i.status==='done').map(i=>i.index).sort()).toEqual([1,2]));
+ release();
+ const result=await run;
+ expect(splitTraceQuestions(threeQuestions)).toHaveLength(3);
+ expect(result.map(i=>i.text)).toEqual(['Q1: B) Mercury','Q2: C) 36','Q3: B) Nucleus']);
+ expect(providers.capture.capture).toHaveBeenCalledTimes(1);
+ expect(providers.ocr.extract).toHaveBeenCalledTimes(1);
+ expect(providers.llm.answerTrace).toHaveBeenCalledTimes(3);
+ expect(events.filter(i=>i.status==='done').map(i=>i.index).sort()).toEqual([0,1,2]);
+ expect(buffers[0].every(v=>v===0)).toBe(true);
+});
+it('keeps each unreadable option isolated to its own question',async()=>{
+ const {pipeline,providers}=fixture();
+ providers.ocr.extract.mockResolvedValue(threeQuestions.replace('C) 36','(0) 36').replace('C) Lysosome','() Lysosome'));
+ providers.llm.answerTrace.mockResolvedValue({unclear:false,label:'B',answer:'',reason:''});
+ const result=await pipeline.run([regions[0]],settings,new AbortController().signal,()=>{});
+ expect(result.map(i=>i.text)).toEqual(['Q1: B) Mercury','Q2: Unclear – re-trace','Q3: Unclear – re-trace']);
+ expect(providers.llm.answerTrace).toHaveBeenCalledTimes(1);
+});
+it('does not split unnumbered text or nonconsecutive headings',()=>{
+ expect(splitTraceQuestions(question)).toEqual([question]);
+ const skipped='Q1. One\nQ3. Three';
+ expect(splitTraceQuestions(skipped)).toEqual([skipped]);
 });
 it('deduplicates identical questions, caches text-only results, and clears cache',async()=>{
  const {pipeline,providers}=fixture();await pipeline.run(regions,settings,new AbortController().signal,()=>{});expect(providers.llm.answerTrace).toHaveBeenCalledTimes(1);

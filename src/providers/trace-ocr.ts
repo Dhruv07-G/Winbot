@@ -1,13 +1,28 @@
 import { createWorker, PSM } from 'tesseract.js';
 import { WinbotError } from '../core/model';
-import { parseMCQ, type TraceOCRProvider } from '../core/trace';
+import { parseMCQ, splitTraceQuestions, type TraceOCRProvider } from '../core/trace';
 // Known OCR punctuation artifact: C) can be emitted as CQ). Retain the
 // observed C, and accept cleanup only when all four A/B/C/D labels are present.
-export function cleanOCRChoices(text:string){
+function cleanOneQuestion(text:string){
   if(parseMCQ(text).complete)return text;
   const candidate=text.replace(/^(\s*)CQ\)(?=\s)/gm,'$1C)');
   const parsed=parseMCQ(candidate);
   return parsed.complete&&parsed.choices.length===4&&parsed.choices.map(c=>c.label).join('')==='ABCD'?candidate:text;
+}
+export function cleanOCRChoices(text:string){
+  return splitTraceQuestions(text).map(cleanOneQuestion).join('\n\n');
+}
+function needsRetry(text:string){
+  return splitTraceQuestions(text).some(part=>{const choices=parseMCQ(part);return choices.detected&&!choices.complete;});
+}
+function mergeReadings(first:string,second:string){
+  if(!first.trim())return second;
+  const original=splitTraceQuestions(first),retry=splitTraceQuestions(second);
+  if(original.length!==retry.length)return first;
+  return original.map((part,i)=>{
+    const old=parseMCQ(part),fresh=parseMCQ(retry[i]);
+    return old.detected&&!old.complete&&fresh.complete?retry[i]:part;
+  }).join('\n\n');
 }
 /** Batch-scoped pool: warm while tracing, parallel OCR, destroy image memory at batch end. */
 export class TraceOCR implements TraceOCRProvider {
@@ -28,8 +43,8 @@ export class TraceOCR implements TraceOCRProvider {
       try {
         await worker.setParameters({tessedit_pageseg_mode:PSM.AUTO});
         const result=await worker.recognize(Buffer.from(image));signal.throwIfAborted();
-        const first=cleanOCRChoices(result.data.text),choices=parseMCQ(first);
-        if(first.trim()&&(!choices.detected||choices.complete))return first;
+        const first=cleanOCRChoices(result.data.text);
+        if(first.trim()&&!needsRetry(first))return first;
         // Re-read pixels, never infer a missing label from its position.
         try{
           if(!/[\u0900-\u097f]/.test(first)){englishOnly=true;await worker.reinitialize('eng');}
@@ -37,8 +52,7 @@ export class TraceOCR implements TraceOCRProvider {
           await worker.setParameters({tessedit_pageseg_mode:PSM.SPARSE_TEXT});
           const retry=await worker.recognize(Buffer.from(image));signal.throwIfAborted();
           const second=cleanOCRChoices(retry.data.text);
-          if(parseMCQ(second).complete||(!first.trim()&&second.trim()))return second;
-          return first;
+          return mergeReadings(first,second);
         }catch(error){if(signal.aborted)throw error;return first;}
       }
       finally{

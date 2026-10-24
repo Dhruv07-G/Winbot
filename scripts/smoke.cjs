@@ -89,6 +89,11 @@ app.whenReady().then(async () => {
     win.webContents.send("trace-item", {index:0,question:"Synthetic test",text:"Q1: C) Pacific",status:"done",sources:[]});
     await wait();
     assert.match(await evaluate("document.body.innerText"), /Q1: C\) Pacific/);
+    win.webContents.send("trace-item", {index:1,question:"Synthetic Q2",text:"Q2: C) 36",status:"done",sources:[]});
+    win.webContents.send("trace-item", {index:2,question:"Synthetic Q3",text:"Q3: B) Nucleus",status:"done",sources:[]});
+    await wait();
+    assert.match(await evaluate("document.body.innerText"), /Q2: C\) 36/);
+    assert.match(await evaluate("document.body.innerText"), /Q3: B\) Nucleus/);
     state.traceItems=[{index:0,question:"Synthetic test",text:"",status:"cancelled",sources:[]}];
     win.webContents.send("state",state);
     await wait();
@@ -105,7 +110,7 @@ app.whenReady().then(async () => {
       /उत्तर मोड शुरू करें/,
     );
     console.log(
-      "PASS: renderer loads, preload isolation, consent checkbox, permission flow, Hindi UI",
+      "PASS: renderer loads, preload isolation, consent checkbox, permission flow, three result cards, Hindi UI",
     );
     app.exit(0);
   } catch (error) {
