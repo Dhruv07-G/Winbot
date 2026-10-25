@@ -74,9 +74,10 @@ it('saves each viewport before scrolling and answers both without recapturing th
  expect(mocks.capture).toHaveBeenCalledTimes(2);
  expect(first[0]).toBe(0);
 });
-it('does not auto-scroll after the cursor leaves the lower edge',async()=>{
+it('rejects auto-scroll when the cursor leaves the selected display',async()=>{
  const session=new TraceSession({assert:()=>{},capturing:()=>{},changed:()=>{}});
  await session.open(defaults);session.select([region]);
+ mocks.cursor={x:-1,y:10};
  await expect(session.scroll('down',true)).rejects.toThrow();
  expect(mocks.capture).not.toHaveBeenCalled();expect(session.regions).toHaveLength(1);
  mocks.cursor={x:10,y:780};

@@ -53,6 +53,7 @@ function Overlay(){
    <strong>{t('Trace & Answer','चुनें और उत्तर पाएँ')}</strong><span className="trace-count">{savedCount+strokes.length} {t(savedCount+strokes.length===1?'region selected':'regions selected','क्षेत्र चुने गए')} / 16</span>
    <button className="trace-move" aria-label={t('Move Trace toolbar','ट्रेस बार खिसकाएँ')} title={t('Drag to uncover a question','प्रश्न दिखाने के लिए खींचें')} onPointerDown={moveDown} onPointerMove={moveDrag} onPointerUp={moveEnd} onPointerCancel={moveEnd}>{t('Move','खिसकाएँ')} ↔</button>
    <button className={!freehand?'chosen':''} onClick={()=>setFreehand(false)}>{t('Rectangle','आयत')}</button><button className={freehand?'chosen':''} onClick={()=>setFreehand(true)}>{t('Freehand','फ्रीहैंड')}</button>
+   <button disabled={submitting||scrolling} onClick={()=>void scrollNow('down')}>{t('Scroll down','नीचे स्क्रोल करें')} ↓</button>
    <button disabled={!(savedCount+strokes.length)||submitting||scrolling} onClick={()=>void undo()}>{t('Undo','पूर्ववत')}</button>
    <button disabled={!(savedCount+strokes.length)||submitting||scrolling} onClick={()=>void clearSelections()}>{t('Clear','हटाएँ')}</button>
    <button className="answer-button" disabled={!(savedCount+strokes.length)||submitting||scrolling} onClick={()=>void submit()}>{t('Answer','उत्तर')} ↵</button>

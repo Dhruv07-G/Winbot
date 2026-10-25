@@ -1,14 +1,18 @@
 import koffi from 'koffi';
 import {WinbotError} from '../core/model';
 
-/** One wheel step while the overlay is hidden, so the app under the pointer scrolls. */
+/** One wheel step while the overlay is hidden, aimed above bottom toolbars. */
 export function scrollUnderlying(direction:'down'|'up'){
  try{
   if(process.platform==='win32'){
    const user=koffi.load('user32.dll');
    // Signed wheel delta is carried in the DWORD's two's-complement bits.
-   const wheel=user.func('void __stdcall mouse_event(uint32_t,uint32_t,uint32_t,uint32_t,uintptr_t)');
-   wheel(0x0800,0,0,direction==='down'?(-240>>>0):240,0);
+   const event=user.func('void __stdcall mouse_event(uint32_t,uint32_t,uint32_t,uint32_t,uintptr_t)');
+   // The hover zone sits over taskbars/status bars in many apps. Move the
+   // pointer into the document, wheel there, then restore its position.
+   event(0x0001,0,(-120>>>0),0,0);
+   try{event(0x0800,0,0,direction==='down'?(-240>>>0):240,0);}
+   finally{event(0x0001,0,120,0,0);}
    return;
   }
   if(process.platform==='darwin'){

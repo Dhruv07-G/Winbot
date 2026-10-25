@@ -55,7 +55,9 @@ export class TraceSession {
   if(!display||JSON.stringify(display.bounds)!==JSON.stringify(this.display.bounds)||display.scaleFactor!==this.display.scaleFactor)throw new WinbotError('captureDisplayChanged');
   if(auto){
    const cursor=screen.getCursorScreenPoint(),bounds=this.display.bounds;
-   if(cursor.x<bounds.x||cursor.x>=bounds.x+bounds.width||cursor.y<bounds.y+bounds.height-55||cursor.y>=bounds.y+bounds.height)throw new WinbotError('traceScrollPointerMoved');
+   // The renderer owns the hover zone. Native cursor coordinates can differ
+   // from the overlay viewport at Windows display scaling and taskbar edges.
+   if(cursor.x<bounds.x||cursor.x>=bounds.x+bounds.width||cursor.y<bounds.y||cursor.y>=bounds.y+bounds.height)throw new WinbotError('traceScrollPointerMoved');
   }
   if(this.scrollJob)return this.scrollJob;
   const overlay=this.overlay!,live=[...this.regions],abort=new AbortController();
