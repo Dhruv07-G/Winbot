@@ -8,7 +8,7 @@ export type TraceItem = {index:number; question:string; text:string; status:"rea
 /** Split explicit consecutive question numbers found within one traced selection. */
 export function splitTraceQuestions(text:string):string[] {
   const headings=[...text.matchAll(/^[ \t]*Q(?:uestion)?[ \t]*(\d{1,2})[.):\-][ \t]*/gim)];
-  if(headings.length<2||headings.length>8||headings.some((heading,i)=>i>0&&Number(heading[1])!==Number(headings[i-1][1])+1))return [text];
+  if(headings.length<2||headings.length>16||headings.some((heading,i)=>i>0&&Number(heading[1])!==Number(headings[i-1][1])+1))return [text];
   const parts=headings.map((heading,i)=>text.slice(heading.index!,i+1<headings.length?headings[i+1].index:text.length).trim());
   return parts.every(part=>part.length>0)?parts:[text];
 }
@@ -41,13 +41,12 @@ export class TracePipeline {
   private cache=new Map<string,{at:number;result:any;sources:Source[]}>();
   clear(){this.cache.clear();}
   constructor(private p:{capture:RegionCaptureProvider;ocr:TraceOCRProvider;search:{search(q:string,l:string,s:AbortSignal):Promise<Source[]>};llm:TraceAnswerProvider}){}
-  async run(regions:Region[],settings:Settings,signal:AbortSignal,emit:(item:TraceItem)=>void){
+  async run(regions:Region[],settings:Settings,signal:AbortSignal,emit:(item:TraceItem)=>void,prefetched:(Uint8Array|undefined)[]=[]){
     if(!settings.ocr)throw new WinbotError('ocrDisabled');
-    if(!regions.length||regions.length>8)throw new WinbotError('traceRegions');
+    if(!regions.length||regions.length>16)throw new WinbotError('traceRegions');
     const pending=new Map<string,Promise<{result:any;sources:Source[]}>>();
     const start=performance.now();
-    const items=regions.map((_,index):TraceItem=>({index,question:'',text:'',status:'reading',sources:[]}));
-    items.forEach(emit);
+    const items:TraceItem[]=[];
     const measure=(index:number,stage:string,at:number)=>console.info('winbot:timing',JSON.stringify({q:index+1,stage,ms:Math.round(performance.now()-at)}));
     const answerQuestion=async(item:TraceItem,index:number):Promise<TraceItem>=>{
       const update=(patch:Partial<TraceItem>)=>{if(!signal.aborted){Object.assign(item,patch);emit({...item});}};
@@ -96,32 +95,41 @@ export class TracePipeline {
       }
       return item;
     };
+    // Capture/OCR starts for every region immediately. Results are numbered only
+    // after earlier regions reveal whether they contain multiple questions.
+    const readings=regions.map(async(region,index)=>{
+      let image:Uint8Array|undefined=prefetched[index];
+      try{
+        signal.throwIfAborted();let at=performance.now();
+        if(!image)image=await this.p.capture.capture(region,signal);
+        measure(index,'capture',at);
+        signal.throwIfAborted();at=performance.now();
+        const question=(await this.p.ocr.extract(image,signal)).trim().slice(0,10000);
+        measure(index,'ocr',at);
+        return {question};
+      }catch(error){
+        return {error:error instanceof WinbotError?error.code:'apiFailure'};
+      }finally{image?.fill(0);}
+    });
     try{
-      const batches=await Promise.all(regions.map(async(region,index):Promise<TraceItem[]>=>{
-        const item=items[index];
-        const update=(patch:Partial<TraceItem>)=>{if(!signal.aborted){Object.assign(item,patch);emit({...item});}};
-        let image:Uint8Array|undefined;
-        try{
-          signal.throwIfAborted();let at=performance.now();
-          image=await this.p.capture.capture(region,signal);measure(index,'capture',at);
-          signal.throwIfAborted();at=performance.now();
-          const question=(await this.p.ocr.extract(image,signal)).trim().slice(0,10000);measure(index,'ocr',at);
-          image.fill(0);image=undefined;signal.throwIfAborted();
-          // A single rectangle may contain several numbered questions. Preserve
-          // multi-region streaming, where later regions can finish before earlier ones.
-          const questions=regions.length===1?splitTraceQuestions(question):[question];
-          item.question=questions[0];
-          if(questions.length===1)return [await answerQuestion(item,index)];
-          const expanded=questions.map((q,i):TraceItem=>i===0?item:{index:i,question:q,text:'',status:'reading',sources:[]});
-          expanded.slice(1).forEach(emit);
-          console.info('winbot:timing',JSON.stringify({stage:'split-questions',count:expanded.length}));
-          return await Promise.all(expanded.map((entry,i)=>answerQuestion(entry,i)));
-        }catch(error){
-          if(!signal.aborted)update({status:'error',error:error instanceof WinbotError?error.code:'apiFailure',text:''});
-          return [item];
-        }finally{image?.fill(0);}
-      }));
-      return batches.flat();
-    }finally{await this.p.ocr.close();}
+      const answers:Promise<TraceItem>[]=[];
+      for(const reading of readings){
+        const result=await reading;
+        if(signal.aborted)continue;
+        if('error' in result){
+          const item:TraceItem={index:items.length,question:'',text:'',status:'error',sources:[],error:result.error};
+          items.push(item);emit({...item});continue;
+        }
+        const questions=splitTraceQuestions(result.question);
+        if(questions.length>1)console.info('winbot:timing',JSON.stringify({stage:'split-questions',count:questions.length}));
+        for(const question of questions){
+          const item:TraceItem={index:items.length,question,text:'',status:'reading',sources:[]};
+          items.push(item);emit({...item});
+          answers.push(answerQuestion(item,item.index));
+        }
+      }
+      await Promise.all(answers);
+      return items;
+    }finally{await Promise.all(readings);await this.p.ocr.close();}
   }
 }

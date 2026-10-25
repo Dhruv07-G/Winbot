@@ -55,7 +55,8 @@ const state = () => ({
   busy,
   capturing,
   traceSelecting: trace.selecting,
-  traceCount: trace.regions.length,
+  traceCount: trace.selectedCount,
+  traceSavedCount: trace.savedCount,
   traceItems,
   collapsed,
   recommendations: recommendations(settings, followups),
@@ -170,7 +171,7 @@ async function openTrace(){
 }
 async function answerTrace(){
  if(busy)return;
- gate.assertCapture();if(!trace.selecting||!trace.regions.length)throw new WinbotError('traceRegions');
+ gate.assertCapture();if(!trace.selecting||!trace.selectedCount)throw new WinbotError('traceRegions');
  busy=true;controller=new AbortController();const signal=controller.signal;traceItems=[];
  win.webContents.send('trace-reset');emit();const snapshot={...settings};
  try{
@@ -272,10 +273,18 @@ async function act(action: string, payload: unknown) {
     case "trace-get": return state();
     case "trace-open": await openTrace(); break;
     case "trace-select": trace.select(payload); break;
+    case "trace-scroll": {
+      const direction=(payload as {direction?:unknown}|null)?.direction;
+      const auto=(payload as {auto?:unknown}|null)?.auto===true;
+      if(direction!=="down"&&direction!=="up")throw new WinbotError("traceRegions");
+      await trace.scroll(direction,auto);break;
+    }
+    case "trace-undo-saved": trace.removeLastSaved();break;
+    case "trace-clear-selections": trace.clearSelections();break;
     case "trace-submit":
       if(busy)break;
       gate.assertCapture();trace.select(payload);
-      if(!trace.regions.length)throw new WinbotError("traceRegions");
+      if(!trace.selectedCount)throw new WinbotError("traceRegions");
       void answerTrace().catch(()=>win.webContents.send("error","apiFailure"));break;
     case "trace-cancel": cancelPending();win.show();break;
     case "get":
@@ -436,7 +445,7 @@ else {
     );
     ipcMain.handle("command", async (event, action, payload) => {
       if (
-        !(event.sender === win.webContents || (trace.owns(event.sender) && ["trace-get","trace-select","trace-submit","trace-cancel"].includes(action))) ||
+        !(event.sender === win.webContents || (trace.owns(event.sender) && ["trace-get","trace-select","trace-scroll","trace-undo-saved","trace-clear-selections","trace-submit","trace-cancel"].includes(action))) ||
         event.senderFrame !== event.sender.mainFrame
       )
         throw new Error("Unauthorized");

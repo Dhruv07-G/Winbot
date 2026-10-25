@@ -47,7 +47,7 @@ const errors: Record<string, [string, string]> = {
   captureDecode: ['The captured image could not be decoded. [captureDecode]', 'स्क्रीन कैप्चर चरण विफल। कोड: captureDecode'],
 
   traceUnsupported: ["Region capture is unavailable on this platform. Linux Trace requires X11.","इस प्लेटफॉर्म पर क्षेत्र कैप्चर उपलब्ध नहीं। Linux पर X11 चाहिए।"],
-  traceRegions: ["Select 1–8 complete questions, including all options.","सभी विकल्पों सहित 1–8 पूरे प्रश्न चुनें।"],
+  traceRegions: ["Select up to 16 complete regions, including all options.","सभी विकल्पों सहित अधिकतम 16 क्षेत्र चुनें।"],
   consent: [
     "Grant screen permission and enable Answer Mode first.",
     "पहले स्क्रीन की अनुमति दें और उत्तर मोड चालू करें।",

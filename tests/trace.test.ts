@@ -30,13 +30,13 @@ function fixture(){
  return {providers,buffers,pipeline:new TracePipeline(providers)};
 }
 const regions=[{x:0,y:0,width:100,height:100},{x:100,y:0,width:100,height:100}];
-it('starts regions concurrently, publishes out of order but keeps Q numbers',async()=>{
+it('starts region OCR concurrently and waits to assign stable question numbers',async()=>{
  const {providers,pipeline,buffers}=fixture();let release!:()=>void;
  const first=new Promise<void>(r=>release=r);let calls=0;
  providers.ocr.extract.mockImplementation(async()=>{const number=calls++;if(number===0)await first;return question.replace('Which ocean',number?'What ocean':'Which ocean');});
  const events:TraceItem[]=[];const run=pipeline.run(regions,settings,new AbortController().signal,i=>events.push({...i}));
- await vi.waitFor(()=>expect(events.some(i=>i.index===1&&i.status==='done')).toBe(true));
- expect(providers.capture.capture).toHaveBeenCalledTimes(2);release();const result=await run;
+ await vi.waitFor(()=>expect(providers.ocr.extract).toHaveBeenCalledTimes(2));
+ expect(providers.capture.capture).toHaveBeenCalledTimes(2);expect(events.some(i=>i.status==='done')).toBe(false);release();const result=await run;
  expect(result.map(i=>i.index)).toEqual([0,1]);expect(result[1].text).toBe('Q2: C) Pacific');expect(buffers.every(b=>b.every(v=>v===0))).toBe(true);expect(providers.ocr.close).toHaveBeenCalled();
 });
 const threeQuestions=[
@@ -78,6 +78,32 @@ it('does not split unnumbered text or nonconsecutive headings',()=>{
  expect(splitTraceQuestions(question)).toEqual([question]);
  const skipped='Q1. One\nQ3. Three';
  expect(splitTraceQuestions(skipped)).toEqual([skipped]);
+});
+it('uses saved images from earlier scroll positions and splits both numbered regions',async()=>{
+ const {pipeline,providers}=fixture();
+ const previous=new Uint8Array([7]);
+ providers.ocr.extract.mockResolvedValueOnce(threeQuestions).mockResolvedValueOnce(threeQuestions.replaceAll('Q1.','Q4.').replaceAll('Q2.','Q5.').replaceAll('Q3.','Q6.'));
+ providers.llm.answerTrace.mockImplementation(async(q:string)=>({unclear:false,label:q.includes('planet')?'B':q.includes('15%')?'C':'B',answer:'',reason:''}));
+ const result=await pipeline.run(regions,settings,new AbortController().signal,()=>{},[previous]);
+ expect(result).toHaveLength(6);
+ expect(result.map(i=>i.index)).toEqual([0,1,2,3,4,5]);
+ expect(providers.capture.capture).toHaveBeenCalledTimes(1);
+ expect(providers.ocr.extract).toHaveBeenCalledTimes(2);
+ expect(previous.every(v=>v===0)).toBe(true);
+});
+it('numbers twelve questions across two scrolled screenshots',async()=>{
+ const {pipeline,providers}=fixture();
+ const page=(first:number)=>Array.from({length:6},(_,i)=>[
+  'Q'+(first+i)+'. What is '+(first+i)+' plus zero?',
+  'A) '+(first+i),'B) 99','C) 100','D) 101'
+ ].join('\n')).join('\n\n');
+ providers.ocr.extract.mockResolvedValueOnce(page(1)).mockResolvedValueOnce(page(7));
+ providers.llm.answerTrace.mockResolvedValue({unclear:false,label:'A',answer:'',reason:''});
+ const result=await pipeline.run(regions,settings,new AbortController().signal,()=>{},[new Uint8Array([3]),new Uint8Array([4])]);
+ expect(result).toHaveLength(12);
+ expect(result[0].text).toBe('Q1: A) 1');
+ expect(result[11].text).toBe('Q12: A) 12');
+ expect(providers.capture.capture).not.toHaveBeenCalled();
 });
 it('deduplicates identical questions, caches text-only results, and clears cache',async()=>{
  const {pipeline,providers}=fixture();await pipeline.run(regions,settings,new AbortController().signal,()=>{});expect(providers.llm.answerTrace).toHaveBeenCalledTimes(1);
