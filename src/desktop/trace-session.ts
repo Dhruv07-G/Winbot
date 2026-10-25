@@ -75,7 +75,9 @@ export class TraceSession {
      staged.push({region,image});
     }
     abort.signal.throwIfAborted();
-    scrollUnderlying(direction);
+    const bounds=this.display!.bounds;
+    const target=process.platform==='win32'?screen.dipToScreenPoint({x:Math.round(bounds.x+bounds.width/2),y:Math.round(bounds.y+bounds.height*0.55)}):undefined;
+    scrollUnderlying(direction,target);
     abort.signal.throwIfAborted();
     if(this.overlay!==overlay||overlay.isDestroyed())throw new WinbotError('traceRegions');
     this.saved.push(...staged);this.regions=[];

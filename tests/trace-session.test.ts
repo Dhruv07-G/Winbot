@@ -6,7 +6,7 @@ const mocks=vi.hoisted(()=>({
  display:{id:1,bounds:{x:0,y:0,width:1000,height:800},scaleFactor:1},cursor:{x:10,y:10},
 }));
 vi.mock('electron',()=>({
- screen:{getCursorScreenPoint:()=>mocks.cursor,getDisplayNearestPoint:()=>mocks.display,getAllDisplays:()=>[mocks.display]},
+ screen:{getCursorScreenPoint:()=>mocks.cursor,getDisplayNearestPoint:()=>mocks.display,getAllDisplays:()=>[mocks.display],dipToScreenPoint:(point:any)=>point},
  BrowserWindow:class{
   destroyed=false;callbacks=new Map();
   webContents={send:vi.fn(),on:vi.fn(),setWindowOpenHandler:vi.fn()};
@@ -67,7 +67,7 @@ it('saves each viewport before scrolling and answers both without recapturing th
  mocks.scroll.mockImplementationOnce(()=>order.push('scroll'));
  await session.scroll('down');
  expect(session.savedCount).toBe(1);expect(session.regions).toEqual([]);
- expect(mocks.scroll).toHaveBeenCalledWith('down');expect(order).toEqual(['capture','scroll']);
+ expect(mocks.scroll).toHaveBeenCalledWith('down',{x:500,y:440});expect(order).toEqual(['capture','scroll']);
  session.select([{...region,y:210}]);
  const items=await session.run(defaults,new AbortController().signal,()=>{});
  expect(items).toHaveLength(2);
