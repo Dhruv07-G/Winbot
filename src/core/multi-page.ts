@@ -1,6 +1,7 @@
 import {parseMCQ, splitTraceQuestions} from './trace';
+import type {Source} from './model';
 
-export type BasketQuestion={id:number;number?:number;question:string;status:'pending'|'answered';answer?:string;error?:string};
+export type BasketQuestion={id:number;number?:number;question:string;status:'pending'|'answered';answer?:string;error?:string;sources?:Source[]};
 export interface ScrollProvider {
  canAutoScroll():boolean;
  scrollNext(signal:AbortSignal):Promise<void>;
@@ -20,8 +21,10 @@ export function similarity(a:string,b:string){const x=grams(a),y=grams(b);let sh
 export function questionNumber(text:string){const found=text.match(/^\s*(?:Q(?:uestion)?\s*)?(\d{1,3})[.):-]\s*/i);return found?Number(found[1]):undefined;}
 /** OCR can miss an intervening heading, so split on all explicit Q headings. */
 export function splitPageQuestions(text:string){
- const headings=[...text.matchAll(/^\s*Q(?:uestion)?\s*\d{1,3}[.):-]\s*/gim)];
- if(headings.length<2)return splitTraceQuestions(text.trim()).filter(Boolean);
+ const explicit=[...text.matchAll(/^\s*Q(?:uestion)?\s*\d{1,3}[.):-]\s*/gim)];
+ const numeric=[...text.matchAll(/^\s*\d{1,3}[.]\s+[^\n]{12,}[?？]\s*$/gm)];
+ const headings=explicit.length?explicit:numeric;
+ if(!headings.length)return splitTraceQuestions(text.trim()).filter(Boolean);
  return headings.map((heading,i)=>text.slice(heading.index!,i+1<headings.length?headings[i+1].index:text.length).trim()).filter(Boolean);
 }
 export class QuestionBasket {
@@ -30,6 +33,7 @@ export class QuestionBasket {
  get pending(){return this.questions.filter(entry=>entry.status==='pending');}
  get answered(){return this.entries.filter(entry=>entry.status==='answered').length;}
  clear(){this.entries=[];this.nextId=1;}
+  restore(entries:BasketQuestion[]){this.entries=entries.map(entry=>({...entry,sources:entry.sources?.map(source=>({...source}))}));this.nextId=Math.max(0,...entries.map(entry=>entry.id))+1;}
  addFrame(text:string){
   const added:BasketQuestion[]=[];
   for(const raw of splitPageQuestions(text)){
@@ -39,10 +43,10 @@ export class QuestionBasket {
     if(number!==undefined&&old.number!==undefined&&number!==old.number)return false;
     const score=similarity(old.question,question);
     const stem=(value:string)=>value.split(/\n\s*(?:[a-hA-H]|[1-8])[.)]\s+/)[0];
-    return number!==undefined&&old.number===number?similarity(stem(old.question),stem(question))>=0.65:score>=0.84;
+    return number!==undefined&&old.number===number?similarity(stem(old.question),stem(question))>=0.65||score>=0.9:score>=0.84;
    });
    if(match){
-    if(match.status==='pending'&&(question.length>match.question.length||parseMCQ(question).complete&&!parseMCQ(match.question).complete))match.question=question;
+    if(match.status==='pending'&&(question.length>match.question.length||parseMCQ(question).complete&&!parseMCQ(match.question).complete)){match.question=question;match.error=undefined;match.answer=undefined;}
     continue;
    }
    const entry:BasketQuestion={id:this.nextId++,number,question,status:'pending'};this.entries.push(entry);added.push({...entry});
@@ -50,7 +54,8 @@ export class QuestionBasket {
   this.entries.sort((a,b)=>a.number===undefined||b.number===undefined?a.id-b.id:a.number-b.number);
   return added;
  }
- markAnswered(id:number,answer:string){const entry=this.entries.find(q=>q.id===id);if(entry&&entry.status==='pending'){entry.status='answered';entry.answer=answer;entry.error=undefined;}}
+ setPartial(id:number,answer:string){const entry=this.entries.find(q=>q.id===id);if(entry&&entry.status==='pending')entry.answer=answer;}
+  markAnswered(id:number,answer:string,sources:Source[]=[]){const entry=this.entries.find(q=>q.id===id);if(entry&&entry.status==='pending'){entry.status='answered';entry.answer=answer;entry.sources=sources;entry.error=undefined;}}
  markError(id:number,error:string){const entry=this.entries.find(q=>q.id===id);if(entry&&entry.status==='pending')entry.error=error;}
 }
 /** Identical downscaled frames end auto mode after one repeated capture. */
@@ -59,5 +64,5 @@ export class FrameEndDetector {
  observe(fingerprint:string){const unchanged=this.previous===fingerprint;this.previous=fingerprint;return unchanged;}
  reset(){this.previous=undefined;}
 }
-export function frameFingerprint(bytes:Uint8Array){let hash=2166136261;const step=Math.max(1,Math.floor(bytes.length/2048));for(let i=0;i<bytes.length;i+=step){hash^=bytes[i];hash=Math.imul(hash,16777619);}return String(bytes.length)+':'+String(hash>>>0);}
+export function frameFingerprint(bytes:Uint8Array){let hash=2166136261;for(let i=0;i<bytes.length;i++){hash^=bytes[i];hash=Math.imul(hash,16777619);}return String(bytes.length)+':'+String(hash>>>0);}
 

@@ -94,6 +94,15 @@ app.whenReady().then(async () => {
     await wait();
     assert.match(await evaluate("document.body.innerText"), /Q2: C\) 36/);
     assert.match(await evaluate("document.body.innerText"), /Q3: B\) Nucleus/);
+    state.multi={active:false,answering:false,pages:5,basket:[
+      {id:1,number:1,question:"Q1. Synthetic",status:"answered",answer:"Q1: B) Mercury"},
+      {id:25,number:25,question:"Q25. Synthetic",status:"pending"}
+    ]};
+    win.webContents.send("state",state);
+    await wait();
+    assert.match(await evaluate("document.body.innerText"), /Question Basket/);
+    assert.match(await evaluate("document.body.innerText"), /Q25/);
+    assert.match(await evaluate("document.body.innerText"), /Q1: B\) Mercury/);
     state.traceItems=[{index:0,question:"Synthetic test",text:"",status:"cancelled",sources:[]}];
     win.webContents.send("state",state);
     await wait();

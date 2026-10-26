@@ -24,6 +24,7 @@ import {
   recommendations,
 } from "../core/model";
 import { TraceSession } from "./trace-session";
+import { DesktopMultiPageSession } from "./multi-page-session";
 import { trustWindowsCertificates } from "./trust";
 import { TraceItem } from "../core/trace";
 import { Pipeline } from "../core/pipeline";
@@ -42,6 +43,8 @@ let win: BrowserWindow,
 let controller: AbortController | undefined;
 let traceItems: TraceItem[]=[];
 const trace = new TraceSession({assert:()=>gate.assertCapture(),capturing:active=>{capturing=active;emit();},changed:()=>emit()});
+const multi = new DesktopMultiPageSession({assert:()=>gate.assertCapture(),capturing:active=>{capturing=active;emit();},changed:()=>emit(),showPanel:()=>win?.show(),hidePanel:()=>win?.hide(),error:code=>win?.webContents.send("error",code)});
+let f8Active=false;
 const file = (name: string) => path.join(app.getPath("userData"), name);
 const hi = () =>
   settings.language === "hi" ||
@@ -52,8 +55,9 @@ const state = () => ({
   history,
   consent: gate.granted,
   mode: gate.enabled,
-  busy,
-  capturing,
+  busy:busy||multi.busy,
+  capturing:capturing||multi.state.active,
+  multi:multi.state,
   traceSelecting: trace.selecting,
   traceCount: trace.selectedCount,
   traceSavedCount: trace.savedCount,
@@ -74,11 +78,12 @@ function icon(active = false) {
   return nativeImage.createFromBuffer(bytes, { width: 16, height: 16 });
 }
 function emit() {
+  if(f8Active&&!multi.busy){globalShortcut.unregister("F8");f8Active=false;}
   if (!win?.isDestroyed()) win.webContents.send("state", state());
   if (tray) {
-    tray.setImage(icon(capturing));
+    tray.setImage(icon(capturing||multi.state.active));
     tray.setToolTip(
-      capturing
+      capturing||multi.state.active
         ? tr("Winbot — capturing", "Winbot — स्क्रीन कैप्चर जारी")
         : tr("Winbot — idle", "Winbot — निष्क्रिय"),
     );
@@ -89,6 +94,11 @@ function emit() {
           label: tr("Capture once", "एक बार कैप्चर करें"),
           enabled: gate.granted && gate.enabled && !busy,
           click: () => void answer(),
+        },
+        {
+          label: tr("Done multi-page capture", "कई पेज कैप्चर पूरा"),
+          enabled: multi.state.active,
+          click: () => multi.done(),
         },
         {
           label: tr("Turn Answer Mode off", "उत्तर मोड बंद करें"),
@@ -109,6 +119,7 @@ function cancelPending() {
   controller?.abort();
   traceItems=traceItems.map(item=>["done","error"].includes(item.status)?item:{...item,status:"cancelled",text:""});
   trace.cancel();
+  multi.cancel();
 }
 function stop() {
   gate.setMode(false);
@@ -163,14 +174,14 @@ function traceHotkey(next:string){
  if(!ok)throw new WinbotError('hotkey');
  if(registeredTraceKey)globalShortcut.unregister(registeredTraceKey);registeredTraceKey=next;
 }
-async function openTrace(){
- if(busy)return;
+async function openTrace(multiPage=false){
+ if(busy||multi.busy)return;
  if(!gate.granted){win.show();win.webContents.send('error','consent');return;}
  gate.setMode(true);win.hide();
- try{await trace.open({...settings});}catch(e){trace.cancel();win.show();win.webContents.send('error',e instanceof WinbotError?e.code:'capture');}emit();
+ try{await trace.open({...settings},multiPage);}catch(e){trace.cancel();win.show();win.webContents.send('error',e instanceof WinbotError?e.code:'capture');}emit();
 }
 async function answerTrace(){
- if(busy)return;
+ if(busy||multi.busy)return;
  gate.assertCapture();if(!trace.selecting||!trace.selectedCount)throw new WinbotError('traceRegions');
  busy=true;controller=new AbortController();const signal=controller.signal;traceItems=[];
  win.webContents.send('trace-reset');emit();const snapshot={...settings};
@@ -225,7 +236,7 @@ const capture = {
   },
 };
 async function answer(question?: string) {
-  if (busy || trace.selecting) return;
+  if (busy || trace.selecting || multi.busy) return;
   if (!gate.granted || !gate.enabled) {
     win.webContents.send("error", "consent");
     return;
@@ -272,6 +283,23 @@ async function act(action: string, payload: unknown) {
   switch (action) {
     case "trace-get": return state();
     case "trace-open": await openTrace(); break;
+    case "multi-open": await openTrace(true); break;
+    case "multi-start": {
+      if(busy||multi.busy)throw new WinbotError("multiBusy");
+      gate.assertCapture();
+      const data=payload as {mode?:unknown;regions?:unknown}|null;
+      if(data?.mode!=="auto"&&data?.mode!=="watch")throw new WinbotError("traceRegions");
+      trace.select(data.regions);
+      if(trace.regions.length!==1||!trace.display)throw new WinbotError("multiRegion");
+      const region=trace.regions[0],display=trace.display;
+      trace.cancel();traceItems=[];win.webContents.send("trace-reset");
+      await multi.start(data.mode,region,display,{...settings});
+      try{if(globalShortcut.register("F8",()=>void multi.nextPage().catch(()=>win.webContents.send("error","traceScrollUnsupported"))))f8Active=true;else win.webContents.send("error","hotkey");}catch{win.webContents.send("error","hotkey");}
+      break;
+    }
+    case "multi-done": multi.done();break;
+    case "multi-next": await multi.nextPage();break;
+    case "multi-clear": multi.clear();break;
     case "trace-select": trace.select(payload); break;
     case "trace-scroll": {
       const direction=(payload as {direction?:unknown}|null)?.direction;
@@ -338,7 +366,7 @@ async function act(action: string, payload: unknown) {
       break;
     }
     case "clear":
-      cancelPending();trace.clear();traceItems=[];win.webContents.send("trace-reset");
+      cancelPending();trace.clear();multi.clear();traceItems=[];win.webContents.send("trace-reset");
       controller?.abort();
       history = [];
       await persist("history.json", []);
@@ -445,7 +473,7 @@ else {
     );
     ipcMain.handle("command", async (event, action, payload) => {
       if (
-        !(event.sender === win.webContents || (trace.owns(event.sender) && ["trace-get","trace-select","trace-scroll","trace-undo-saved","trace-clear-selections","trace-submit","trace-cancel"].includes(action))) ||
+        !(event.sender === win.webContents || (trace.owns(event.sender) && ["trace-get","trace-select","trace-scroll","trace-undo-saved","trace-clear-selections","trace-submit","trace-cancel","multi-start"].includes(action))) ||
         event.senderFrame !== event.sender.mainFrame
       )
         throw new Error("Unauthorized");
@@ -479,6 +507,7 @@ else {
     quitting = true;
     controller?.abort();
     trace.cancel();
+    multi.cancel();
     globalShortcut.unregisterAll();
   });
   app.on("window-all-closed", () => {});

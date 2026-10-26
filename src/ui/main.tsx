@@ -4,6 +4,7 @@ import { Answer, Settings, defaults, languageOf } from "../core/model";
 import "katex/dist/katex.min.css";
 import "./style.css";
 import type { TraceItem } from "../core/trace";
+import type { BasketQuestion } from "../core/multi-page";
 import { AnswerContent } from "./AnswerContent";
 type State = {
   settings: Settings;
@@ -19,6 +20,7 @@ type State = {
   traceSelecting: boolean;
   traceCount: number;
   traceItems: TraceItem[];
+  multi?: {active:boolean;answering:boolean;mode?:"auto"|"watch";pages:number;reason?:string;basket:BasketQuestion[]};
 };
 declare global {
   interface Window {
@@ -48,6 +50,10 @@ const errors: Record<string, [string, string]> = {
 
   traceUnsupported: ["Region capture is unavailable on this platform. Linux Trace requires X11.","इस प्लेटफॉर्म पर क्षेत्र कैप्चर उपलब्ध नहीं। Linux पर X11 चाहिए।"],
   traceRegions: ["Select up to 16 complete regions, including all options.","सभी विकल्पों सहित अधिकतम 16 क्षेत्र चुनें।"],
+  traceScrollUnsupported: ["Could not scroll the document. Try Watch scrolling or scroll manually.","दस्तावेज़ स्क्रोल नहीं हुआ। स्क्रोल देखते रहें चुनें या खुद स्क्रोल करें।"],
+  multiRegion: ["Select one rectangle around the question list.","प्रश्न सूची के चारों ओर एक आयत चुनें।"],
+  multiBusy: ["Finish the current capture first.","पहले वर्तमान कैप्चर पूरा करें।"],
+  multiUnclear: ["Unclear — capture this question and all its options again.","अस्पष्ट — इस प्रश्न और सभी विकल्पों को फिर कैप्चर करें।"],
   consent: [
     "Grant screen permission and enable Answer Mode first.",
     "पहले स्क्रीन की अनुमति दें और उत्तर मोड चालू करें।",
@@ -230,8 +236,8 @@ function App() {
               <h1>{t("Let’s start with permission.", "पहले आपकी अनुमति।")}</h1>
               <p>
                 {t(
-                  "Winbot takes one screenshot when you enable Answer Mode or request another capture. Nothing is captured while it is off.",
-                  "उत्तर मोड चालू करने या कैप्चर माँगने पर Winbot एक स्क्रीनशॉट लेता है। मोड बंद होने पर कोई कैप्चर नहीं होता।",
+                  "Answer Mode captures once per request. Multi-page Capture takes repeated frames only after you start a page session, and stops at Done or the page limit. Turning Answer Mode off stops capture.",
+                  "उत्तर मोड हर अनुरोध पर एक कैप्चर करता है। कई पेज कैप्चर केवल आपके पेज सत्र शुरू करने पर बार-बार कैप्चर करता है और Done या पेज सीमा पर रुकता है। उत्तर मोड बंद करने पर कैप्चर रुक जाता है।",
                 )}
               </p>
               <p>
@@ -286,6 +292,7 @@ function App() {
             <>
               <section className="controls">
                 <button disabled={state.busy} onClick={()=>command("trace-open")}>{t("Trace & Answer", "चुनें और उत्तर पाएँ")}</button>
+                <button disabled={state.busy} onClick={()=>command("multi-open")}>{t("Multi-page Capture","कई पेज कैप्चर")}</button>
                 {state.busy && state.traceItems.length>0 && <button onClick={()=>command("trace-cancel")}>{t("Cancel batch", "बैच रद्द करें")}</button>}
                 {state.traceSelecting && <span>{state.traceCount} {t("questions selected", "प्रश्न चुने गए")}</span>}
                 <button
@@ -304,6 +311,22 @@ function App() {
                 </button>
                 <small>{s.hotkey}</small>
               </section>
+              {!!state.multi?.basket.length && <section className="trace-results" aria-live="polite">
+                <h2>{t("Question Basket","प्रश्न टोकरी")} · {state.multi.basket.filter(q=>q.status==="answered").length}/{state.multi.basket.length}</h2>
+                <p className="muted">{state.multi.active?t("Capturing pages…","पेज कैप्चर हो रहे हैं…"):state.multi.answering?t("Answering in batches…","समूहों में उत्तर आ रहे हैं…"):t("Pages captured","पेज कैप्चर हुए")} · {state.multi.pages} {t("frames","फ्रेम")}</p>
+                <div className="controls">
+                  {state.multi.active&&<button onClick={()=>command("multi-done")}>{t("Done · answer now","पूरा · अब उत्तर दें")}</button>}
+                  {state.multi.active&&state.multi.mode==="watch"&&<button onClick={()=>command("multi-next")}>{t("Next page · F8","अगला पेज · F8")}</button>}
+                  {!state.multi.active&&!state.multi.answering&&<button onClick={()=>command("multi-open")}>{t("Add more pages","और पेज जोड़ें")}</button>}
+                  {!state.multi.active&&!state.multi.answering&&<button onClick={()=>command("multi-clear")}>{t("Clear basket","टोकरी साफ करें")}</button>}
+                </div>
+                {state.multi.basket.map((item,i)=><article key={item.id}>
+                  <strong>Q{item.number||i+1}</strong> <small>{item.status==="answered"?t("Answered","उत्तर दिया"):item.error?t("Could not answer","उत्तर नहीं मिला"):t("Pending","बाकी")}</small>
+                  {item.error?<p role="alert">{(errors[item.error]||errors.apiFailure)[hindi?1:0]}</p>:item.answer&&<AnswerContent text={item.answer}/>}
+                  <details><summary>{t("Detected text","पहचाना गया पाठ")}</summary><p>{item.question}</p></details>
+                  {s.sources&&item.sources?.length&&<div className="sources">{item.sources.map((source,i)=><button key={i} onClick={()=>command("link",source.url)}>{i+1}. {source.title}</button>)}</div>}
+                </article>)}
+              </section>}
               {!!state.traceItems?.length && <section className="trace-results" aria-live="polite">
                 <h2>{t("Traced answers", "चुने गए प्रश्नों के उत्तर")}</h2>
                 {state.traceItems.filter(Boolean).map(item=><article key={item.index}>

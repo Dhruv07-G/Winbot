@@ -22,3 +22,12 @@
 - Verify macOS/X11 capture on hardware; replace deprecated macOS capture with ScreenCaptureKit and add a region-capable Wayland adapter.
 - Improve validation for legitimate two/three-choice MCQs, clipboard/text extraction, and selection across multiple monitors.
 - Measure cold/warm capture-to-first-answer timings; optimize based on stage logs.
+
+
+## Multi-page platform completion
+
+- Device-test Windows page focus and badge placement with Notepad, browsers, and PDF viewers; test macOS and X11 permissions and scrolling on hardware.
+- Implement Android native host: MediaProjection foreground capture, AccessibilityService ACTION_SCROLL_FORWARD / gesture fallback, ML Kit, draggable bubble and bottom-sheet answers.
+- Implement iOS native host: ReplayKit user-started capture, Vision OCR, scroll-watch progress UI and bottom-sheet answer chips. iOS auto-scroll remains unavailable.
+- Add trusted browser-extension and PDF-import adapters that feed DOM/PDF text through ScrollProvider.readText when accessible; keep OCR fallback.
+- Add a Wayland portal-backed region capture/scroll strategy where compositor permissions allow it.

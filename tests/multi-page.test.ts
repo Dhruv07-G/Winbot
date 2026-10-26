@@ -64,3 +64,58 @@ it('watch mode captures changed frames and accepts Done',async()=>{
  expect(session.progress.reason).toBe('done');
 });
 
+
+it('keeps frame capture moving while local OCR works in parallel',async()=>{
+ let release!:()=>void;const gate=new Promise<void>(resolve=>release=resolve);
+ let captures=0;
+ const session=new MultiPageCapture({
+  canAutoScroll:()=>true,scrollNext:async()=>{},capture:async()=>new Uint8Array([++captures])
+ },{extract:async image=>{await gate;return q(image[0]);},close:async()=>{}},()=>{});
+ const run=session.run('auto',new AbortController().signal,2);
+ await vi.waitFor(()=>expect(captures).toBe(2));
+ expect(session.basket.questions).toHaveLength(0);
+ release();const result=await run;
+ expect(result.map(entry=>entry.number)).toEqual([1,2]);
+ expect(session.progress.reason).toBe('limit');
+});
+
+
+it('splits numbered questions without a Q prefix when their stems are clear',()=>{
+ const text='1. Which planet is nearest the Sun?\nA) Mercury\nB) Venus\nC) Earth\nD) Mars\n\n2. Which planet has rings?\nA) Mercury\nB) Venus\nC) Saturn\nD) Mars';
+ const basket=new QuestionBasket();basket.addFrame(text);
+ expect(basket.questions.map(q=>q.number)).toEqual([1,2]);
+});
+it('uses source text directly when a trusted browser or PDF adapter provides it',async()=>{
+ const capture=vi.fn(async()=>new Uint8Array([1]));
+ const extract=vi.fn(async()=>'');
+ const session=new MultiPageCapture({canAutoScroll:()=>false,scrollNext:async()=>{},capture,readText:async()=>q(4)}, {extract,close:async()=>{}},()=>{});
+ await session.run('watch',new AbortController().signal,1);
+ expect(session.basket.questions.map(q=>q.number)).toEqual([4]);
+ expect(capture).not.toHaveBeenCalled();expect(extract).not.toHaveBeenCalled();
+});
+
+
+it('keeps unclear questions pending so a later clearer frame can repair them',()=>{
+ const basket=new QuestionBasket();
+ basket.addFrame('Q7. Which planet has rings?\nA) Earth\nB) Saturn');
+ basket.markError(1,'multiUnclear');
+ basket.addFrame('Q7. Which planet has rings?\nA) Earth\nB) Saturn\nC) Mercury\nD) Venus');
+ expect(basket.questions).toHaveLength(1);
+ expect(basket.pending).toHaveLength(1);
+ expect(basket.questions[0].error).toBeUndefined();
+ expect(basket.questions[0].question).toContain('D) Venus');
+});
+
+
+it('does not reread a frame when the user scrolls back to an earlier page',async()=>{
+ const seen=[1,2,1];let cursor=0;
+ const extract=vi.fn(async(image:Uint8Array)=>q(image[0]));
+ const session=new MultiPageCapture({canAutoScroll:()=>false,scrollNext:async()=>{},capture:async()=>new Uint8Array([seen[cursor++]])},{extract,close:async()=>{}},()=>{});
+ await session.captureFrame(new AbortController().signal);
+ await session.captureFrame(new AbortController().signal);
+ const revisit=await session.captureFrame(new AbortController().signal);
+ expect(revisit.duplicate).toBe(true);
+ await vi.waitFor(()=>expect(session.basket.questions).toHaveLength(2));
+ expect(extract).toHaveBeenCalledTimes(2);
+});
+

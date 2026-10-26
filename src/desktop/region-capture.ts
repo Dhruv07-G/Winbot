@@ -4,7 +4,7 @@ import { nativeImage, screen } from 'electron';
 import type { Region } from '../core/trace';
 import { WinbotError } from '../core/model';
 /** Native region-only capture; never calls desktopCapturer. */
-export async function captureRegion(region:Region,display:Electron.Display,signal:AbortSignal):Promise<Uint8Array>{
+export async function captureRegion(region:Region,display:Electron.Display,signal:AbortSignal,options?:{maxDimension?:number}):Promise<Uint8Array>{
  signal.throwIfAborted();
  if(region.x<0||region.y<0||region.x+region.width>display.bounds.width||region.y+region.height>display.bounds.height)throw new WinbotError('traceRegions');
  const dip={x:Math.floor(display.bounds.x+region.x),y:Math.floor(display.bounds.y+region.y),width:Math.ceil(region.width),height:Math.ceil(region.height)};
@@ -33,7 +33,7 @@ export async function captureRegion(region:Region,display:Electron.Display,signa
     if(image.isEmpty())throw new WinbotError('captureDecode');
     const size=image.getSize();const longest=Math.max(size.width,size.height);
     // Small UI lettering benefits from larger glyphs before local OCR.
-    const factor=longest>1800?1800/longest:longest<1200?Math.min(2,1800/longest):1;
+    const factor=options?.maxDimension?Math.min(1,options.maxDimension/longest):longest>1800?1800/longest:longest<1200?Math.min(2,1800/longest):1;
     if(factor!==1)image=image.resize({width:Math.round(size.width*factor),height:Math.round(size.height*factor),quality:'best'});
     finish(undefined,image.toPNG());
    }catch(e){bytes.fill(0);finish(signal.aborted?e:new WinbotError('captureDecode'));}

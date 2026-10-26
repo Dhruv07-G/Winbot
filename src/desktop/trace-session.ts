@@ -31,7 +31,7 @@ export class TraceSession {
  get selecting(){return !!this.overlay&&!this.overlay.isDestroyed();}
  get selectedCount(){return this.saved.length+this.regions.length;}
  get savedCount(){return this.saved.length;}
- async open(settings:Settings){
+ async open(settings:Settings,multiPage=false){
   this.hooks.assert();if(this.selecting){this.overlay!.focus();return;}
   if(!settings.ocr)throw new WinbotError('ocrDisabled');
   if(process.platform==='linux'&&process.env.XDG_SESSION_TYPE==='wayland')throw new WinbotError('traceUnsupported');
@@ -41,7 +41,7 @@ export class TraceSession {
   this.overlay.webContents.setWindowOpenHandler(()=>({action:'deny'}));this.overlay.webContents.on('will-navigate',e=>e.preventDefault());
   this.overlay.on('closed',()=>{this.overlay=undefined;this.regions=[];this.eraseSaved();this.hooks.changed();});
   // Warm local OCR workers while the user draws; no screenshot is taken here.
-  const overlay=this.overlay;this.ocr.warm();await overlay.loadFile(path.join(__dirname,'../dist/trace.html'));if(this.overlay!==overlay||overlay.isDestroyed())return;overlay.show();overlay.focus();this.hooks.changed();
+  const overlay=this.overlay;this.ocr.warm();await overlay.loadFile(path.join(__dirname,'../dist/trace.html'),{query:multiPage?{mode:'multi'}:{}});if(this.overlay!==overlay||overlay.isDestroyed())return;overlay.show();overlay.focus();this.hooks.changed();
  }
  select(payload:unknown){
   if(!this.selecting||!this.display||this.scrollJob)throw new WinbotError('traceRegions');
