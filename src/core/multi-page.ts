@@ -24,11 +24,25 @@ export function splitPageQuestions(text:string){
  const explicit=[...text.matchAll(/^\s*Q(?:uestion)?\s*\d{1,3}[.):-]\s*/gim)];
  // OCR commonly reads the Q in a heading as 0 ("03."). Mix both heading
  // forms within a frame instead of discarding numeric headings when a Q is seen.
- const numeric=[...text.matchAll(/^[ \t]*0?\d{1,3}[.][ \t]+[^\n]*/gmu)]
+ const numeric=[...text.matchAll(/^[ \t]*\(?0?\d{1,3}[.][ \t]+[^\n]*/gmu)]
   .filter(match=>/\b(?:what|which|who|where|when|why|how|find|calculate|compute|solve|select|identify)\b|[?？]|[\u0900-\u097f]{4,}/iu.test(match[0]));
  const headings=[...explicit,...numeric].sort((a,b)=>a.index!-b.index!);
  if(!headings.length)return splitTraceQuestions(text.trim()).filter(Boolean);
- return headings.map((heading,i)=>text.slice(heading.index!,i+1<headings.length?headings[i+1].index:text.length).trim()).filter(Boolean);
+ const headingNumber=(heading:RegExpMatchArray|undefined)=>heading?Number(heading[0].match(/\d{1,3}/)?.[0]):undefined;
+ return headings.map((heading,i)=>{
+  let part=text.slice(heading.index!,i+1<headings.length?headings[i+1].index:text.length).trim();
+  if(numeric.some(candidate=>candidate.index===heading.index)){
+   let number=headingNumber(heading)!;
+   // A stray "(2" in front of 6 can yield "(26.". Repair only when
+   // the neighboring explicit numbers prove the missing ordinal.
+   if(heading[0].trimStart().startsWith('(')){
+    const suffix=Number(String(number).slice(1)),previous=headingNumber(headings[i-1]),next=headingNumber(headings[i+1]);
+    if(previous!==undefined&&next!==undefined&&suffix===previous+1&&next===suffix+1)number=suffix;
+   }
+   part=part.replace(/^\(?0?\d{1,3}[.]/,`Q${number}.`);
+  }
+  return part;
+ }).filter(Boolean);
 }
 export class QuestionBasket {
  private entries:BasketQuestion[]=[];private nextId=1;

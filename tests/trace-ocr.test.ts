@@ -57,3 +57,14 @@ it('cleans the reproduced CQ) punctuation artifact only with a complete observed
  const missing=corrected.replace('B) Ribosome\n','').replace('C) Mito','CQ) Mito');
  expect(cleanOCRChoices(missing)).toBe(missing);
 });
+it('uses the English retry for one unclear option in a mixed-heading page',async()=>{
+ const first='Q5. What is five plus five?\nA)5\nB)10\nC)15\nD)20\n(26. What is six plus six?\nA)6\nB)12\nCj18\nD)24\nQ7. What is seven plus seven?\nA)7\nB)14\nC)21\nD)28';
+ const second=first.replace('(26.','Q6.').replace('Cj18','C)18');
+ mocks.recognize.mockResolvedValueOnce({data:{text:first}}).mockResolvedValueOnce({data:{text:second}});
+ const reader=new TraceOCR();reader.warm(1);
+ const result=await reader.extract(new Uint8Array([1]),new AbortController().signal);
+ expect(result).toContain('Q6. What is six plus six?');
+ expect(result).toContain('C)18');
+ expect(mocks.recognize).toHaveBeenCalledTimes(2);
+ await reader.close();
+});

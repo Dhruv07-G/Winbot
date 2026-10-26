@@ -1,6 +1,7 @@
 import { createWorker, PSM } from 'tesseract.js';
 import { WinbotError } from '../core/model';
-import { parseMCQ, splitTraceQuestions, type TraceOCRProvider } from '../core/trace';
+import {questionNumber,splitPageQuestions} from '../core/multi-page';
+import { parseMCQ, type TraceOCRProvider } from '../core/trace';
 // Known OCR punctuation artifact: C) can be emitted as CQ). Retain the
 // observed C, and accept cleanup only when all four A/B/C/D labels are present.
 function cleanOneQuestion(text:string){
@@ -10,18 +11,18 @@ function cleanOneQuestion(text:string){
   return parsed.complete&&parsed.choices.length===4&&parsed.choices.map(c=>c.label).join('')==='ABCD'?candidate:text;
 }
 export function cleanOCRChoices(text:string){
-  return splitTraceQuestions(text).map(cleanOneQuestion).join('\n\n');
+  return splitPageQuestions(text).map(cleanOneQuestion).join('\n\n');
 }
 function needsRetry(text:string){
-  return splitTraceQuestions(text).some(part=>{const choices=parseMCQ(part);return choices.detected&&!choices.complete;});
+  return splitPageQuestions(text).some(part=>{const choices=parseMCQ(part);return choices.detected&&!choices.complete;});
 }
 function mergeReadings(first:string,second:string){
   if(!first.trim())return second;
-  const original=splitTraceQuestions(first),retry=splitTraceQuestions(second);
+  const original=splitPageQuestions(first),retry=splitPageQuestions(second);
   if(original.length!==retry.length)return first;
   return original.map((part,i)=>{
     const old=parseMCQ(part),fresh=parseMCQ(retry[i]);
-    return old.detected&&!old.complete&&fresh.complete?retry[i]:part;
+    return questionNumber(part)===questionNumber(retry[i])&&old.detected&&!old.complete&&fresh.complete?retry[i]:part;
   }).join('\n\n');
 }
 /** Batch-scoped pool: warm while tracing, parallel OCR, destroy image memory at batch end. */

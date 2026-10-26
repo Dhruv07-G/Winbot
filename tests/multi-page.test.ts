@@ -134,3 +134,9 @@ it('merges degraded OCR of one numbered question from overlapping frames',()=>{
  expect(basket.questions[0].question).toContain('D) 28');
 });
 
+it('repairs parenthesis-prefixed OCR headings only with neighboring ordinal proof',()=>{
+ const frame='Q5. What is five plus five?\nA) 5\nB) 10\nC) 15\nD) 20\n(26. What is six plus six?\nA) 6\nB) 12\nC) 18\nD) 24\nQ7. What is seven plus seven?\nA) 7\nB) 14\nC) 21\nD) 28';
+ expect(splitPageQuestions(frame).map(questionNumber)).toEqual([5,6,7]);
+ expect(splitPageQuestions('Q13. What is thirteen?\n(14. What is fourteen?\nQ15. What is fifteen?').map(questionNumber)).toEqual([13,14,15]);
+ expect(splitPageQuestions('Q5. What is five?\n(26. What is twenty six?\nQ27. What is twenty seven?').map(questionNumber)).toEqual([5,26,27]);
+});

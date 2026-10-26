@@ -13,8 +13,8 @@ export function splitTraceQuestions(text:string):string[] {
   return parts.every(part=>part.length>0)?parts:[text];
 }
 export function parseMCQ(text:string): MCQ {
-  const letters = /(?:^|\n|\s{1,})(\([a-hA-H]\)|[a-hA-H][.)])\s+([^]*?)(?=(?:\s+(?:\([a-hA-H]\)|[a-hA-H][.)])\s+)|$)/g;
-  const numbered = /(?:^|\n)\s*(\((?:[1-9]|i{1,3}|iv|v|vi{1,3})\)|(?:[1-9]|i{1,3}|iv|v|vi{1,3})[.)])\s+([^]*?)(?=\n\s*(?:\((?:[1-9]|i{1,3}|iv|v|vi{1,3})\)|(?:[1-9]|i{1,3}|iv|v|vi{1,3})[.)])\s+|$)/gi;
+  const letters = /(?:^|\n|\s{1,})(\([a-hA-H]\)|[a-hA-H][.)])\s*([^]*?)(?=(?:\s+(?:\([a-hA-H]\)|[a-hA-H][.)])\s*)|$)/g;
+  const numbered = /(?:^|\n)\s*(\((?:[1-9]|i{1,3}|iv|v|vi{1,3})\)|(?:[1-9]|i{1,3}|iv|v|vi{1,3})[.)])\s*([^]*?)(?=\n\s*(?:\((?:[1-9]|i{1,3}|iv|v|vi{1,3})\)|(?:[1-9]|i{1,3}|iv|v|vi{1,3})[.)])\s*|$)/gi;
   let matches=[...text.matchAll(letters)];
   if(!matches.length) matches=[...text.matchAll(numbered)];
   const choices=matches.map(m=>({label:m[1].replace(/[().]/g,""),text:m[2].trim()}));

@@ -129,3 +129,9 @@ it('rejects truncated model output instead of publishing it as final',async()=>{
  vi.stubEnv('OPENAI_API_KEY','test');vi.stubGlobal('fetch',vi.fn(async()=>new Response('data: '+JSON.stringify({choices:[{delta:{content:'{"unclear":false,"label":"C"'},finish_reason:'length'}]})+'\n\n')));
  await expect(new TraceLLM().answerTrace(question,parseMCQ(question),[],settings,'en',new AbortController().signal,()=>{})).rejects.toThrow('apiFailure');
 });
+it('accepts OCR choices without a space after their labels',()=>{
+ const compact=parseMCQ('Q2. What is 2 plus 2?\nA)2\nB)4\nC)6\nD)8');
+ expect(compact.complete).toBe(true);
+ expect(compact.choices.map(choice=>choice.text)).toEqual(['2','4','6','8']);
+ expect(parseMCQ('Q1. What is 1 plus 1?\nA)\nB)2\nC)3\nD)4').complete).toBe(false);
+});
