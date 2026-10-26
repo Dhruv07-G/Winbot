@@ -66,7 +66,7 @@ export class TraceSession {
    const staged:{region:Region;image:Uint8Array}[]=[];
    overlay.hide();
    try{
-    if(live.length)await delay(180);
+    await delay(live.length?180:100);
     abort.signal.throwIfAborted();
     // Capture only selected rectangles before the page moves. Pixels stay in
     // memory until Answer and are erased on cancellation or completion.
