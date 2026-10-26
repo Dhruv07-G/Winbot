@@ -22,8 +22,11 @@ export function questionNumber(text:string){const found=text.match(/^\s*(?:Q(?:u
 /** OCR can miss an intervening heading, so split on all explicit Q headings. */
 export function splitPageQuestions(text:string){
  const explicit=[...text.matchAll(/^\s*Q(?:uestion)?\s*\d{1,3}[.):-]\s*/gim)];
- const numeric=[...text.matchAll(/^\s*\d{1,3}[.]\s+[^\n]{12,}[?？]\s*$/gm)];
- const headings=explicit.length?explicit:numeric;
+ // OCR commonly reads the Q in a heading as 0 ("03."). Mix both heading
+ // forms within a frame instead of discarding numeric headings when a Q is seen.
+ const numeric=[...text.matchAll(/^[ \t]*0?\d{1,3}[.][ \t]+[^\n]*/gmu)]
+  .filter(match=>/\b(?:what|which|who|where|when|why|how|find|calculate|compute|solve|select|identify)\b|[?？]|[\u0900-\u097f]{4,}/iu.test(match[0]));
+ const headings=[...explicit,...numeric].sort((a,b)=>a.index!-b.index!);
  if(!headings.length)return splitTraceQuestions(text.trim()).filter(Boolean);
  return headings.map((heading,i)=>text.slice(heading.index!,i+1<headings.length?headings[i+1].index:text.length).trim()).filter(Boolean);
 }
@@ -43,7 +46,7 @@ export class QuestionBasket {
     if(number!==undefined&&old.number!==undefined&&number!==old.number)return false;
     const score=similarity(old.question,question);
     const stem=(value:string)=>value.split(/\n\s*(?:[a-hA-H]|[1-8])[.)]\s+/)[0];
-    return number!==undefined&&old.number===number?similarity(stem(old.question),stem(question))>=0.65||score>=0.9:score>=0.84;
+    return number!==undefined&&old.number===number?similarity(stem(old.question),stem(question))>=0.5||score>=0.72:score>=0.84;
    });
    if(match){
     if(match.status==='pending'&&(question.length>match.question.length||parseMCQ(question).complete&&!parseMCQ(match.question).complete)){match.question=question;match.error=undefined;match.answer=undefined;}

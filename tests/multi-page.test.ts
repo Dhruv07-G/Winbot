@@ -1,5 +1,5 @@
 import {expect,it,vi} from 'vitest';
-import {FrameEndDetector,QuestionBasket,frameFingerprint,similarity,splitPageQuestions} from '../src/core/multi-page';
+import {FrameEndDetector,QuestionBasket,frameFingerprint,similarity,splitPageQuestions,questionNumber} from '../src/core/multi-page';
 import {MultiPageCapture} from '../src/core/multi-page-capture';
 
 const q=(n:number)=>'Q'+n+'. Which planet is number '+n+'?\nA) Mercury\nB) Venus\nC) Earth\nD) Mars';
@@ -117,5 +117,20 @@ it('does not reread a frame when the user scrolls back to an earlier page',async
  expect(revisit.duplicate).toBe(true);
  await vi.waitFor(()=>expect(session.basket.questions).toHaveLength(2));
  expect(extract).toHaveBeenCalledTimes(2);
+});
+
+
+it('splits mixed Q and OCR zero-prefixed headings without splitting numbered choices',()=>{
+ const text='Q2. What is two plus two?\nA) 2\nB) 4\nC) 6\nD) 8\n03. What is three plus three?\nA) 3\nB) 6\nC) 9\nD) 12\nQ4. What is four plus four?\nA) 4\nB) 8\nC) 12\nD) 16';
+ expect(splitPageQuestions(text).map(questionNumber)).toEqual([2,3,4]);
+ const basket=new QuestionBasket();basket.addFrame(text);
+ expect(basket.questions.map(item=>item.number)).toEqual([2,3,4]);
+});
+it('merges degraded OCR of one numbered question from overlapping frames',()=>{
+ const basket=new QuestionBasket();
+ basket.addFrame('Q7. What is seven plus seven?\nA) 7\nB) 14\nC) 21');
+ basket.addFrame('Q7. what is seven plus seven\nA) 7\nB) 14\nC) 21\nD) 28');
+ expect(basket.questions).toHaveLength(1);
+ expect(basket.questions[0].question).toContain('D) 28');
 });
 
