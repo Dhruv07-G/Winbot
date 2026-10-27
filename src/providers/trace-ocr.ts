@@ -19,14 +19,29 @@ function needsRetry(text:string){
 function mergeReadings(first:string,second:string){
   if(!first.trim())return second;
   const original=splitPageQuestions(first),retry=splitPageQuestions(second);
+  const merged=new Map<number,string>();
+  for(const part of original){const number=questionNumber(part);if(number!==undefined)merged.set(number,part);}
+  for(const part of retry){
+    const number=questionNumber(part);if(number===undefined)continue;
+    const old=merged.get(number),fresh=parseMCQ(part);
+    if(!old){if(fresh.complete)merged.set(number,part);continue;}
+    if(parseMCQ(old).complete||!fresh.complete)continue;
+    // English OCR often reads option labels better, but loses a Hindi stem.
+    const firstOption=old.search(/(?:^|\n)\s*A[.)]/i),retryOption=part.search(/(?:^|\n)\s*A[.)]/i);
+    if(/[\u0900-\u097f]/.test(old)&&!/[\u0900-\u097f]/.test(part)&&firstOption>=0&&retryOption>=0){
+      merged.set(number,old.slice(0,firstOption).trimEnd()+'\n'+part.slice(retryOption).trimStart());
+    }else merged.set(number,part);
+  }
+  if(merged.size)return [...merged].sort((a,b)=>a[0]-b[0]).map(([,part])=>part).join('\n\n');
   if(original.length!==retry.length)return first;
   return original.map((part,i)=>{
     const old=parseMCQ(part),fresh=parseMCQ(retry[i]);
-    return questionNumber(part)===questionNumber(retry[i])&&old.detected&&!old.complete&&fresh.complete?retry[i]:part;
+    return old.detected&&!old.complete&&fresh.complete?retry[i]:part;
   }).join('\n\n');
 }
 /** Batch-scoped pool: warm while tracing, parallel OCR, destroy image memory at batch end. */
 export class TraceOCR implements TraceOCRProvider {
+  constructor(private readonly pageMode=false){}
   private workers:Promise<Awaited<ReturnType<typeof createWorker>>>[]=[];
   private tails:Promise<unknown>[]=[];
   private next=0;
@@ -42,15 +57,17 @@ export class TraceOCR implements TraceOCRProvider {
       const abort=()=>{void worker.terminate().catch(()=>{});};signal.addEventListener('abort',abort,{once:true});
       let englishOnly=false;
       try {
-        await worker.setParameters({tessedit_pageseg_mode:PSM.AUTO});
+        await worker.setParameters({tessedit_pageseg_mode:this.pageMode?PSM.SINGLE_BLOCK:PSM.AUTO});
         const result=await worker.recognize(Buffer.from(image));signal.throwIfAborted();
         const first=cleanOCRChoices(result.data.text);
-        if(first.trim()&&!needsRetry(first))return first;
+        const firstHeading=result.data.text.search(/^\s*Q\d{1,3}[.):-]/m);
+        const orphanPrefix=this.pageMode&&firstHeading>0&&result.data.text.slice(0,firstHeading).trim().length>=12;
+        if(first.trim()&&!needsRetry(first)&&!orphanPrefix)return first;
         // Re-read pixels, never infer a missing label from its position.
         try{
-          if(!/[\u0900-\u097f]/.test(first)){englishOnly=true;await worker.reinitialize('eng');}
+          if(this.pageMode||!/[\u0900-\u097f]/.test(first)){englishOnly=true;await worker.reinitialize('eng');}
           signal.throwIfAborted();
-          await worker.setParameters({tessedit_pageseg_mode:PSM.SPARSE_TEXT});
+          await worker.setParameters({tessedit_pageseg_mode:this.pageMode?PSM.AUTO:PSM.SPARSE_TEXT});
           const retry=await worker.recognize(Buffer.from(image));signal.throwIfAborted();
           const second=cleanOCRChoices(retry.data.text);
           return mergeReadings(first,second);

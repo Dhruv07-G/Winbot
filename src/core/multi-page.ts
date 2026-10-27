@@ -21,6 +21,14 @@ export function similarity(a:string,b:string){const x=grams(a),y=grams(b);let sh
 export function questionNumber(text:string){const found=text.match(/^\s*(?:Q(?:uestion)?\s*)?(\d{1,3})[.):-]\s*/i);return found?Number(found[1]):undefined;}
 /** OCR can miss an intervening heading, so split on all explicit Q headings. */
 export function splitPageQuestions(text:string){
+ // OCR can read the 9 in Q9 as S. Repair only when both neighboring
+ // numbered headings prove the missing ordinal.
+ text=text.replace(/^[ \t]*QS[.):-][ \t]*/gim,(match,offset:number)=>{
+  const before=[...text.slice(0,offset).matchAll(/^[ \t]*Q(?:uestion)?\s*(\d{1,3})[.):-]/gim)].at(-1);
+  const after=text.slice(offset+match.length).match(/^[ \t]*Q(?:uestion)?\s*(\d{1,3})[.):-]/im);
+  const previous=before?Number(before[1]):undefined,next=after?Number(after[1]):undefined;
+  return previous!==undefined&&next===previous+2?'Q'+(previous+1)+'. ':match;
+ });
  const explicit=[...text.matchAll(/^\s*Q(?:uestion)?\s*\d{1,3}[.):-]\s*/gim)];
  // OCR commonly reads the Q in a heading as 0 ("03."). Mix both heading
  // forms within a frame instead of discarding numeric headings when a Q is seen.
@@ -63,7 +71,7 @@ export class QuestionBasket {
     return number!==undefined&&old.number===number?similarity(stem(old.question),stem(question))>=0.5||score>=0.72:score>=0.84;
    });
    if(match){
-    if(match.status==='pending'&&(question.length>match.question.length||parseMCQ(question).complete&&!parseMCQ(match.question).complete)){match.question=question;match.error=undefined;match.answer=undefined;}
+    if(match.status==='pending'&&!parseMCQ(match.question).complete&&(parseMCQ(question).complete||question.length>match.question.length)){match.question=question;match.error=undefined;match.answer=undefined;}
     continue;
    }
    const entry:BasketQuestion={id:this.nextId++,number,question,status:'pending'};this.entries.push(entry);added.push({...entry});

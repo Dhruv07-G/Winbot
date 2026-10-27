@@ -46,7 +46,7 @@ export class DesktopMultiPageSession {
   if(mode==='auto'&&process.platform==='linux'&&process.env.XDG_SESSION_TYPE==='wayland')throw new WinbotError('traceScrollUnsupported');
   this.mode=mode;this.settings={...settings};this.abort=new AbortController();this.reason=undefined;this.pages=0;
   this.target={x:Math.round(display.bounds.x+region.x+region.width/2),y:Math.round(display.bounds.y+region.y+region.height/2)};
-  const signal=this.abort.signal,reader=new TraceOCR();
+  const signal=this.abort.signal,reader=new TraceOCR(true);
   reader.warm();
   const provider:ScrollProvider={
    canAutoScroll:()=>process.platform!=='linux'||process.env.XDG_SESSION_TYPE!=='wayland',

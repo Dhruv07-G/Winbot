@@ -140,3 +140,16 @@ it('repairs parenthesis-prefixed OCR headings only with neighboring ordinal proo
  expect(splitPageQuestions('Q13. What is thirteen?\n(14. What is fourteen?\nQ15. What is fifteen?').map(questionNumber)).toEqual([13,14,15]);
  expect(splitPageQuestions('Q5. What is five?\n(26. What is twenty six?\nQ27. What is twenty seven?').map(questionNumber)).toEqual([5,26,27]);
 });
+
+it('repairs an OCR Q9 heading only with Q8 and Q10 as neighbors',()=>{
+ const text='Q8. What is eight?\nA)1\nB)2\nC)3\nD)4\nQS. What is nine?\nA)1\nB)2\nC)3\nD)4\nQ10. What is ten?\nA)1\nB)2\nC)3\nD)4';
+ expect(splitPageQuestions(text).map(questionNumber)).toEqual([8,9,10]);
+ expect(splitPageQuestions('Q8. Eight?\nQS. Something?\nQ11. Eleven?').map(questionNumber)).toEqual([8,11]);
+});
+it('keeps a complete basket reading when a longer overlapping OCR frame drops an option',()=>{
+ const basket=new QuestionBasket();
+ const complete='Q7. What is seven plus seven?\nA) 7\nB) 14\nC) 21\nD) 28';
+ basket.addFrame(complete);
+ basket.addFrame('Q7. What is seven plus seven? This text is much longer but the last choice is missing\nA) 7\nB) 14\nC) 21');
+ expect(basket.questions[0].question).toBe(complete);
+});

@@ -135,3 +135,12 @@ it('accepts OCR choices without a space after their labels',()=>{
  expect(compact.choices.map(choice=>choice.text)).toEqual(['2','4','6','8']);
  expect(parseMCQ('Q1. What is 1 plus 1?\nA)\nB)2\nC)3\nD)4').complete).toBe(false);
 });
+
+it('parses compact OCR choices separated by hyphens or dots',()=>{
+ const compact=parseMCQ('Q1. Which?\nA)1-B)2-C)3-D)4');
+ expect(compact.complete).toBe(true);
+ expect(compact.choices.map(choice=>choice.text)).toEqual(['1','2','3','4']);
+ const dots=parseMCQ('Q2. Which?\nA) One · B) Two · C) Three · D) Four');
+ expect(dots.complete).toBe(true);
+ expect(dots.choices.map(choice=>choice.text)).toEqual(['One','Two','Three','Four']);
+});

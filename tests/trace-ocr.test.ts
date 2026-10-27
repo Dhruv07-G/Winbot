@@ -1,6 +1,6 @@
 import {beforeEach,expect,it,vi} from 'vitest';
 const mocks=vi.hoisted(()=>({recognize:vi.fn(),setParameters:vi.fn(async()=>{}),reinitialize:vi.fn(async()=>{}),terminate:vi.fn(async()=>{})}));
-vi.mock('tesseract.js',()=>({PSM:{AUTO:'3',SPARSE_TEXT:'11'},createWorker:vi.fn(async()=>mocks)}));
+vi.mock('tesseract.js',()=>({PSM:{AUTO:'3',SINGLE_BLOCK:'6',SPARSE_TEXT:'11'},createWorker:vi.fn(async()=>mocks)}));
 import {TraceOCR,cleanOCRChoices} from '../src/providers/trace-ocr';
 import {parseMCQ} from '../src/core/trace';
 const broken="Which organelle produces most of a cell's ATP?\nA) Nudleus\nB) Ribosome\n(0 Mitochondrion\nD) Golgi apparatus";
@@ -67,4 +67,33 @@ it('uses the English retry for one unclear option in a mixed-heading page',async
  expect(result).toContain('C)18');
  expect(mocks.recognize).toHaveBeenCalledTimes(2);
  await reader.close();
+});
+
+it('uses block layout for multi-page OCR without changing regular Trace OCR',async()=>{
+ const text='Q2. What is 2 plus 2?\nA) 2\nB) 4\nC) 6\nD) 8';
+ mocks.recognize.mockResolvedValue({data:{text}});
+ const page=new TraceOCR(true);page.warm(1);
+ expect(await page.extract(new Uint8Array([1]),new AbortController().signal)).toContain('Q2.');
+ expect(mocks.setParameters).toHaveBeenCalledWith({tessedit_pageseg_mode:'6'});
+ await page.close();
+});
+it('recovers a dropped first heading and preserves Hindi stems while repairing options',async()=>{
+ const first='is 1 plus 1?\nA)1-B)2-C)3-D)4\nQ2. What is two?\nA)1\nB)2\nC)3\nD)4';
+ const second='Q1. What is 1 plus 1?\nA)1-B)2-C)3-D)4\nQ2. What is two?\nA)1\nB)2\nC)3\nD)4';
+ mocks.recognize.mockResolvedValueOnce({data:{text:first}}).mockResolvedValueOnce({data:{text:second}});
+ const page=new TraceOCR(true);page.warm(1);
+ const result=await page.extract(new Uint8Array([1]),new AbortController().signal);
+ expect(result).toContain('Q1. What is 1 plus 1?');
+ expect(result).toContain('Q2. What is two?');
+ expect(mocks.setParameters).toHaveBeenLastCalledWith({tessedit_pageseg_mode:'3'});
+ await page.close();
+ mocks.recognize.mockReset();
+ mocks.recognize.mockResolvedValueOnce({data:{text:'Q21. 21 + 21 कितना है?\nA)21\nB)42\n063\nD)84'}})
+  .mockResolvedValueOnce({data:{text:'Q21. 21 + 21 kitna hai?\nA)21\nB)42\nC)63\nD)84'}});
+ const hindi=new TraceOCR(true);hindi.warm(1);
+ const merged=await hindi.extract(new Uint8Array([1]),new AbortController().signal);
+ expect(merged).toContain('कितना है?');
+ expect(merged).toContain('C)63');
+ expect(parseMCQ(merged).complete).toBe(true);
+ await hindi.close();
 });
