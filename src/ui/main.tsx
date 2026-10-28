@@ -66,6 +66,10 @@ const errors: Record<string, [string, string]> = {
     "The provider could not answer. Please try again.",
     "सेवा उत्तर नहीं दे सकी। फिर से प्रयास करें।",
   ],
+  apiRateLimit: [
+    "AI rate limit reached. Wait a little, then use Retry provider errors.",
+    "AI की अनुरोध सीमा पूरी हुई। थोड़ी देर बाद सेवा की त्रुटियाँ फिर आज़माएँ।",
+  ],
   offline: [
     "Network unavailable or request timed out. Check your connection.",
     "नेटवर्क उपलब्ध नहीं या समय समाप्त हुआ। कनेक्शन जाँचें।",
@@ -317,6 +321,7 @@ function App() {
                 <div className="controls">
                   {state.multi.active&&<button onClick={()=>command("multi-done")}>{t("Done · answer now","पूरा · अब उत्तर दें")}</button>}
                   {state.multi.active&&state.multi.mode==="watch"&&<button onClick={()=>command("multi-next")}>{t("Next page · F8","अगला पेज · F8")}</button>}
+                  {!state.multi.active&&!state.multi.answering&&state.multi.basket.some(item=>item.error&&item.error!=="multiUnclear")&&<button onClick={()=>command("multi-retry")}>{t("Retry provider errors","सेवा की त्रुटियाँ फिर आज़माएँ")}</button>}
                   {!state.multi.active&&!state.multi.answering&&<button onClick={()=>command("multi-open")}>{t("Add more pages","और पेज जोड़ें")}</button>}
                   {!state.multi.active&&!state.multi.answering&&<button onClick={()=>command("multi-clear")}>{t("Clear basket","टोकरी साफ करें")}</button>}
                 </div>

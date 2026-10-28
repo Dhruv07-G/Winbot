@@ -65,7 +65,7 @@ export class QuestionBasket {
    const question=raw.trim().slice(0,10000),number=questionNumber(question);
    if(!question||(!number&&question.length<12))continue;
    const match=this.entries.find(old=>{
-    if(number!==undefined&&old.number!==undefined&&number!==old.number)return false;
+    if(number!==undefined&&old.number!==undefined)return number===old.number;
     const score=similarity(old.question,question);
     const stem=(value:string)=>value.split(/\n\s*(?:[a-hA-H]|[1-8])[.)]\s+/)[0];
     return number!==undefined&&old.number===number?similarity(stem(old.question),stem(question))>=0.5||score>=0.72:score>=0.84;

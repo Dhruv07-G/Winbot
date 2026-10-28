@@ -299,6 +299,7 @@ async function act(action: string, payload: unknown) {
     }
     case "multi-done": multi.done();break;
     case "multi-next": await multi.nextPage();break;
+    case "multi-retry": await multi.retryFailures();break;
     case "multi-clear": multi.clear();break;
     case "trace-select": trace.select(payload); break;
     case "trace-scroll": {

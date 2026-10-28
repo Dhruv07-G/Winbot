@@ -26,7 +26,8 @@ it('splits nonconsecutive headings and uses conservative fuzzy matching',()=>{
  expect(splitPageQuestions(q(1)+'\n\n'+q(3))).toHaveLength(2);
  expect(similarity(q(1),q(1).replace('planet','pIanet'))).toBeGreaterThan(.45);
  const basket=new QuestionBasket();basket.addFrame(q(1));basket.addFrame(q(1).replace('Which planet is number 1','Compute the square root of 81'));
- expect(basket.questions).toHaveLength(2);
+ expect(basket.questions).toHaveLength(1);
+ expect(basket.questions[0].question).toBe(q(1));
 });
 it('detects an unchanged frame and changes in downscaled bytes',()=>{
  const detector=new FrameEndDetector(),first=frameFingerprint(new Uint8Array([1,2,3]));
@@ -152,4 +153,13 @@ it('keeps a complete basket reading when a longer overlapping OCR frame drops an
  basket.addFrame(complete);
  basket.addFrame('Q7. What is seven plus seven? This text is much longer but the last choice is missing\nA) 7\nB) 14\nC) 21');
  expect(basket.questions[0].question).toBe(complete);
+});
+
+it('never repeats the same numbered question when overlapping OCR readings differ greatly',()=>{
+ const basket=new QuestionBasket();
+ basket.addFrame('Q19. Which gas is most abundant?\nA) Oxygen\nB) Nitrogen\nC) Carbon dioxide\nD) Argon');
+ basket.markAnswered(1,'Q19: B) Nitrogen');
+ basket.addFrame('Q19. Whlch gas ls most abundant in the atmosphere?\nA) Oxyqen\nB) Nitrogen\nC) CO2\nD) Argon');
+ expect(basket.questions).toHaveLength(1);
+ expect(basket.questions[0].answer).toBe('Q19: B) Nitrogen');
 });

@@ -75,27 +75,59 @@ export class DesktopMultiPageSession {
  }
  done(){this.capture?.done();}
  async nextPage(){if(this.mode!=='watch'||!this.capture?.progress.active)return;this.hooks.assert();scrollUnderlying('down',process.platform==='win32'?screen.dipToScreenPoint(this.target!):undefined);}
- private async answerPending(signal:AbortSignal){
+ private async answerPending(signal:AbortSignal,retryErrorsOnly=false){
   const settings=this.settings!,llm=new TraceLLM();
-  const pending=this.capture!.basket.pending;
+  const pending=this.capture!.basket.pending.filter(entry=>!retryErrorsOnly||entry.error&&entry.error!=='multiUnclear');
   for(let offset=0;offset<pending.length;offset+=6){
    signal.throwIfAborted();
-   await Promise.all(pending.slice(offset,offset+6).map(async entry=>{
-    const start=performance.now(),language=languageOf(settings,entry.question),mcq=parseMCQ(entry.question),number=entry.number||entry.id;
+   const chunk=pending.slice(offset,offset+6);
+   const prepared=await Promise.all(chunk.map(async entry=>{
+    const mcq=parseMCQ(entry.question),language=languageOf(settings,entry.question);
+    if(mcq.detected&&!mcq.complete){this.capture!.basket.markError(entry.id,'multiUnclear');this.update();return null;}
     try{
-     if(mcq.detected&&!mcq.complete){this.capture!.basket.markError(entry.id,'multiUnclear');this.update();return;}
      const sources=settings.traceSearch?await createSearchProvider().search(entry.question,language,signal):[];
-     signal.throwIfAborted();
-     const result=await llm.answerTrace(entry.question,mcq,sources,settings,language,signal,partial=>{
-      const answer=formatTrace(number-1,mcq,partial,settings,language);this.capture!.basket.setPartial(entry.id,answer);this.update();
-     });
-     if(result.unclear)this.capture!.basket.markError(entry.id,'multiUnclear');
-     else this.capture!.basket.markAnswered(entry.id,formatTrace(number-1,mcq,result,settings,language),sources);
-     console.info('winbot:timing',JSON.stringify({stage:'multipage-answer',q:number,ms:Math.round(performance.now()-start)}));
-    }catch(error){if(!signal.aborted)this.capture!.basket.markError(entry.id,error instanceof WinbotError?error.code:'apiFailure');}
-    this.update();
+     return {id:entry.id,question:entry.question,mcq,language,sources};
+    }catch(error){
+     if(!signal.aborted)this.capture!.basket.markError(entry.id,error instanceof WinbotError?error.code:'apiFailure');
+     this.update();return null;
+    }
    }));
+   const items=prepared.filter((item):item is NonNullable<typeof item>=>item!==null);
+   if(!items.length)continue;
+   const started=performance.now();
+   try{
+    const results=await llm.answerBatch(items,settings,signal);
+    for(const result of results){
+     const item=items.find(candidate=>candidate.id===result.id)!;
+     const entry=chunk.find(candidate=>candidate.id===result.id)!;
+     const number=entry.number||entry.id;
+     if(result.unclear)this.capture!.basket.markError(entry.id,'multiUnclear');
+     else this.capture!.basket.markAnswered(entry.id,formatTrace(number-1,item.mcq,result,settings,item.language),item.sources);
+    }
+    console.info('winbot:timing',JSON.stringify({stage:'multipage-answer-batch',count:items.length,ms:Math.round(performance.now()-started)}));
+   }catch(error){
+    if(signal.aborted)throw error;
+    const code=error instanceof WinbotError?error.code:'apiFailure';
+    for(const item of items)this.capture!.basket.markError(item.id,code);
+    if(code==='apiRateLimit'){
+     for(const entry of pending.slice(offset+6))this.capture!.basket.markError(entry.id,code);
+     this.update();break;
+    }
+   }
+   this.update();
   }
+ }
+ async retryFailures(){
+  if(this.busy)throw new WinbotError('multiBusy');
+  if(!this.capture||!this.settings)return;
+  if(!this.capture.basket.pending.some(entry=>entry.error&&entry.error!=='multiUnclear'))return;
+  this.abort=new AbortController();const signal=this.abort.signal;
+  this.answering=true;this.update();
+  this.pending=(async()=>{
+   try{await this.answerPending(signal,true);}
+   catch(error){if(!signal.aborted)this.hooks.error(error instanceof WinbotError?error.code:'apiFailure');}
+   finally{this.answering=false;this.pending=undefined;this.update();}
+  })();
  }
  cancel(){this.abort?.abort();this.capture?.done();this.closeBadge();this.answering=false;this.hooks.capturing(false);this.hooks.showPanel();this.update();}
  clear(){this.cancel();this.capture?.basket.clear();this.capture=undefined;this.mode=undefined;this.pages=0;this.reason=undefined;this.update();}
