@@ -324,7 +324,7 @@ function App() {
                   <strong>Q{item.number||i+1}</strong> <small>{item.status==="answered"?t("Answered","उत्तर दिया"):item.error?t("Could not answer","उत्तर नहीं मिला"):t("Pending","बाकी")}</small>
                   {item.error?<p role="alert">{(errors[item.error]||errors.apiFailure)[hindi?1:0]}</p>:item.answer&&<AnswerContent text={item.answer}/>}
                   <details><summary>{t("Detected text","पहचाना गया पाठ")}</summary><p>{item.question}</p></details>
-                  {s.sources&&item.sources?.length&&<div className="sources">{item.sources.map((source,i)=><button key={i} onClick={()=>command("link",source.url)}>{i+1}. {source.title}</button>)}</div>}
+                  {s.sources&&!!item.sources?.length&&<div className="sources">{item.sources.map((source,i)=><button key={i} onClick={()=>command("link",source.url)}>{i+1}. {source.title}</button>)}</div>}
                 </article>)}
               </section>}
               {!!state.traceItems?.length && <section className="trace-results" aria-live="polite">

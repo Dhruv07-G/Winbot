@@ -17,7 +17,7 @@ export function parseMCQ(text:string): MCQ {
   const numbered = /(?:^|\n)\s*(\((?:[1-9]|i{1,3}|iv|v|vi{1,3})\)|(?:[1-9]|i{1,3}|iv|v|vi{1,3})[.)])\s*([^]*?)(?=\n\s*(?:\((?:[1-9]|i{1,3}|iv|v|vi{1,3})\)|(?:[1-9]|i{1,3}|iv|v|vi{1,3})[.)])\s*|$)/gi;
   let matches=[...text.matchAll(letters)];
   if(!matches.length) matches=[...text.matchAll(numbered)];
-  const choices=matches.map(m=>({label:m[1].replace(/[().]/g,""),text:m[2].replace(/\s*[·•-]\s*$/,'').trim()}));
+  const choices=matches.map(m=>({label:m[1].replace(/[().]/g,""),text:m[2].replace(/\s*[·•–—-]\s*$/,'').trim()}));
   const labels=choices.map(c=>c.label.toLowerCase());
   const sequences=[['a','b','c','d','e','f','g','h'],['1','2','3','4','5','6','7','8'],['i','ii','iii','iv','v','vi','vii','viii']];
   const complete=choices.length>=4&&choices.length<=8&&choices.every(c=>c.text.length>0)&&sequences.some(seq=>labels.every((l,i)=>l===seq[i]));

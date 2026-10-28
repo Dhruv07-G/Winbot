@@ -144,3 +144,9 @@ it('parses compact OCR choices separated by hyphens or dots',()=>{
  expect(dots.complete).toBe(true);
  expect(dots.choices.map(choice=>choice.text)).toEqual(['One','Two','Three','Four']);
 });
+
+it('removes OCR separator dashes from the displayed MCQ option',()=>{
+ const mcq=parseMCQ('Which?\nA) 12 – B) 13 – C) 14 – D) 15');
+ expect(mcq.complete).toBe(true);
+ expect(formatTrace(0,mcq,{label:'B'},settings,'en')).toBe('Q1: B) 13');
+});

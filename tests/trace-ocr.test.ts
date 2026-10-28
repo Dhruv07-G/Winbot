@@ -85,7 +85,7 @@ it('recovers a dropped first heading and preserves Hindi stems while repairing o
  const result=await page.extract(new Uint8Array([1]),new AbortController().signal);
  expect(result).toContain('Q1. What is 1 plus 1?');
  expect(result).toContain('Q2. What is two?');
- expect(mocks.setParameters).toHaveBeenLastCalledWith({tessedit_pageseg_mode:'3'});
+ expect(mocks.setParameters).toHaveBeenLastCalledWith({tessedit_pageseg_mode:'6'});
  await page.close();
  mocks.recognize.mockReset();
  mocks.recognize.mockResolvedValueOnce({data:{text:'Q21. 21 + 21 कितना है?\nA)21\nB)42\n063\nD)84'}})
@@ -96,4 +96,26 @@ it('recovers a dropped first heading and preserves Hindi stems while repairing o
  expect(merged).toContain('C)63');
  expect(parseMCQ(merged).complete).toBe(true);
  await hindi.close();
+});
+
+it('repairs compact OCR option labels only when four visible slots and three labels agree',()=>{
+ const raw='Q2. Which?\nA)2 -B)4-0C4-D)3';
+ const repaired=cleanOCRChoices(raw);
+ expect(repaired).toContain('C) 4');
+ expect(parseMCQ(repaired).complete).toBe(true);
+ const missing='Q2. Which?\nA)2 -B)4-D)3';
+ expect(cleanOCRChoices(missing)).toBe(missing);
+ const uncertain='Q2. Which?\nA)2 -8)4-048-0)3';
+ expect(cleanOCRChoices(uncertain)).toBe(uncertain);
+});
+
+it('keeps a numbered but unreadable first question in the basket instead of dropping it',async()=>{
+ const first='blurred 1?\nA)1-B)2-02-D)4\nQ2. What is two?\nA)1\nB)2\nC)3\nD)4';
+ const second='Q1. What is one?\nA)1-B)2-02-D)4\nQ2. What is two?\nA)1\nB)2\nC)3\nD)4';
+ mocks.recognize.mockResolvedValueOnce({data:{text:first}}).mockResolvedValueOnce({data:{text:second}});
+ const page=new TraceOCR(true);page.warm(1);
+ const result=await page.extract(new Uint8Array([1]),new AbortController().signal);
+ expect(result).toContain('Q1. What is one?');
+ expect(parseMCQ(result.split('Q2.')[0]).complete).toBe(false);
+ await page.close();
 });

@@ -4,9 +4,22 @@ import {questionNumber,splitPageQuestions} from '../core/multi-page';
 import { parseMCQ, type TraceOCRProvider } from '../core/trace';
 // Known OCR punctuation artifact: C) can be emitted as CQ). Retain the
 // observed C, and accept cleanup only when all four A/B/C/D labels are present.
+function repairCompactLine(line:string){
+  if(!/^\s*A[.)]/i.test(line))return line;
+  const parts=line.split(/\s*(?:[·•–—]|-(?=\s*(?:[A-D][.)]?|0C|OC|O[.)]|0[.)]|8[.)]|©[.)])))\s*/i);
+  if(parts.length!==4)return line;
+  const labels=[/^A[.)]/i,/^(?:B[.)]|B(?=\d)|8[.)])/i,/^(?:C[.)]|C(?=\d)|0C(?=\d)|OC(?=\d)|O[.)]|0[.)]|©[.)])/i,/^(?:D[.)]|D(?=\d)|O[.)]|0[.)])/i];
+  const strong=parts.filter((part,i)=>new RegExp('^'+String.fromCharCode(65+i)+'(?:[.)]|(?=\\d))','i').test(part.trim())).length;
+  if(strong<3)return line;
+  const values=parts.map((part,i)=>part.trim().replace(labels[i],'').trim());
+  if(values.some(value=>!value))return line;
+  return values.map((value,i)=>String.fromCharCode(65+i)+') '+value).join('\n');
+}
 function cleanOneQuestion(text:string){
   if(parseMCQ(text).complete)return text;
-  const candidate=text.replace(/^(\s*)CQ\)(?=\s)/gm,'$1C)');
+  const compact=text.split('\n').map(repairCompactLine).join('\n');
+  if(parseMCQ(compact).complete)return compact;
+  const candidate=compact.replace(/^(\s*)CQ\)(?=\s)/gm,'$1C)');
   const parsed=parseMCQ(candidate);
   return parsed.complete&&parsed.choices.length===4&&parsed.choices.map(c=>c.label).join('')==='ABCD'?candidate:text;
 }
@@ -16,15 +29,17 @@ export function cleanOCRChoices(text:string){
 function needsRetry(text:string){
   return splitPageQuestions(text).some(part=>{const choices=parseMCQ(part);return choices.detected&&!choices.complete;});
 }
-function mergeReadings(first:string,second:string){
+function mergeReadings(first:string,second:string,includePartial=false){
   if(!first.trim())return second;
   const original=splitPageQuestions(first),retry=splitPageQuestions(second);
   const merged=new Map<number,string>();
+  const numbers=original.map(questionNumber).filter((number):number is number=>number!==undefined);
+  const min=Math.min(...numbers),max=Math.max(...numbers);
   for(const part of original){const number=questionNumber(part);if(number!==undefined)merged.set(number,part);}
   for(const part of retry){
     const number=questionNumber(part);if(number===undefined)continue;
     const old=merged.get(number),fresh=parseMCQ(part);
-    if(!old){if(fresh.complete)merged.set(number,part);continue;}
+    if(!old){if(fresh.complete||includePartial&&fresh.detected&&number>=min-1&&number<=max+1)merged.set(number,part);continue;}
     if(parseMCQ(old).complete||!fresh.complete)continue;
     // English OCR often reads option labels better, but loses a Hindi stem.
     const firstOption=old.search(/(?:^|\n)\s*A[.)]/i),retryOption=part.search(/(?:^|\n)\s*A[.)]/i);
@@ -67,10 +82,10 @@ export class TraceOCR implements TraceOCRProvider {
         try{
           if(this.pageMode||!/[\u0900-\u097f]/.test(first)){englishOnly=true;await worker.reinitialize('eng');}
           signal.throwIfAborted();
-          await worker.setParameters({tessedit_pageseg_mode:this.pageMode?PSM.AUTO:PSM.SPARSE_TEXT});
+          await worker.setParameters({tessedit_pageseg_mode:this.pageMode?PSM.SINGLE_BLOCK:PSM.SPARSE_TEXT});
           const retry=await worker.recognize(Buffer.from(image));signal.throwIfAborted();
           const second=cleanOCRChoices(retry.data.text);
-          return mergeReadings(first,second);
+          return mergeReadings(first,second,this.pageMode);
         }catch(error){if(signal.aborted)throw error;return first;}
       }
       finally{
