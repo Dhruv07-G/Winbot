@@ -67,7 +67,7 @@ it('saves each viewport before scrolling and answers both without recapturing th
  mocks.scroll.mockImplementationOnce(()=>order.push('scroll'));
  await session.scroll('down');
  expect(session.savedCount).toBe(1);expect(session.regions).toEqual([]);
- expect(mocks.scroll).toHaveBeenCalledWith('down',{x:500,y:440});expect(order).toEqual(['capture','scroll']);
+ expect(mocks.scroll).toHaveBeenCalledWith('down',process.platform==='win32'?{x:500,y:440}:undefined);expect(order).toEqual(['capture','scroll']);
  session.select([{...region,y:210}]);
  const items=await session.run(defaults,new AbortController().signal,()=>{});
  expect(items).toHaveLength(2);
