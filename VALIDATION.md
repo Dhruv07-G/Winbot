@@ -1,4 +1,16 @@
-# Validation · 16 October 2026
+# Validation log
+
+## Public desktop preview · 30 October 2026
+
+- The current source passes 119 automated tests across 14 files and a TypeScript/Vite/Electron bundle build on Windows.
+- The production dependency audit reports zero known advisories after updating Zod and overriding KaTeX. The Electron runtime was updated to 44.10.0 to address its reported advisory. Three advisories remain in build/test dependencies that are not copied into the portable app.
+- A Windows user has launched the portable build, granted consent, captured traced text, and answered multiple questions. Dense 25-question lists have still produced missed questions and wrong or duplicate answers. A new capture now clears the previous Question Basket, but that specific live regression has not yet been verified after a restart.
+- The public Windows ZIP is created from an allowlist and checked to contain no `.env`, logs, or key files. Each user must supply their own provider credentials.
+- macOS and Linux capture have not been tested on real devices. Android and iOS native hosts are not implemented. The release is a Windows desktop preview, not a verified all-platform product.
+
+The dated sections below record earlier checks and limitations at the time they were written; they do not supersede this current status.
+
+## 16 October 2026
 
 ## Passed
 - Production TypeScript check, Vite renderer build, and Electron main/preload bundling with Electron 44.7.2 types.

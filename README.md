@@ -1,14 +1,18 @@
-# Winbot · MVP
+# Winbot · desktop preview
 
-A visible, on-demand screen assistant for Windows, macOS, and Linux. Electron + React + TypeScript, local Hindi/English OCR, replaceable search and AI adapters.
+A visible, on-demand screen assistant built with Electron, React, and TypeScript. It reads selected questions with local Hindi/English OCR and answers through your configured AI provider. The downloadable build currently targets **Windows x64**. macOS and Linux can be built from source, but their screen-capture paths still need device testing. Android and iOS apps do not exist yet.
 
-See [VALIDATION.md](VALIDATION.md) for checks performed and outstanding desktop validation. The source builds, unit tests, and live synthetic-image OCR/search/answer pipeline pass; native startup could not be verified in the managed build environment.
+See [VALIDATION.md](VALIDATION.md) for checks performed and remaining limitations. Answers can be wrong or incomplete, especially with dense or partially visible question lists. Check important answers yourself.
 
-## Windows first: install and run
+## Download and run on Windows
 
-The local installation includes a portable Windows folder at `release/portable-win-x64`. Open `Winbot.exe` there and keep the entire folder together. Its adjacent `.env` is now configured and tested with Gemini for answers and Tavily for search. Gemini uses the existing `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL` fields through its compatible endpoint; these names do not require an OpenAI-issued key. If `%APPDATA%\winbot\.env` already exists, it takes priority. The portable bundle includes the downloaded English and Hindi OCR models when `local-models` is present at packaging time. Relative `TESSDATA_PATH` values resolve against the selected `.env` directory.
+Download `Winbot-*-win-x64.zip` from [Releases](https://github.com/Dhruv07-G/Winbot/releases), extract the entire ZIP, and keep the folder together. Copy `.env.example` to `.env` beside `Winbot.exe`, then edit `.env` with **your own** AI key, model, and endpoint. To enable web sources, add a Brave or Tavily search key as described below. No key is included in the public download. Double-click `Winbot.exe`; this portable build makes no Start Menu entry and requires no administrator installation. The executable is unsigned, so Windows may show a publisher warning. Download only from this repository's release page and verify the published SHA-256 file if you need to check the download.
 
-For the source installation, double-click `Start-Winbot.cmd` or use the commands below. Its local `.env` has been configured with the installed OCR model directory; API key fields remain empty until you fill them in.
+Winbot asks for screen consent on each launch. It captures only when you request an answer or start a visible multi-page session. If `%APPDATA%\winbot\.env` already exists, that file takes priority over the portable `.env`. The portable build includes English and Hindi OCR models when available at packaging time. Relative `TESSDATA_PATH` values resolve against the selected `.env` directory.
+
+## Build from source
+
+On Windows, double-click `Start-Winbot.cmd` after setup or use the commands below.
 
 Install Node.js 24 LTS (or Node.js 22.12+) and Git. In PowerShell, from this project directory:
 
@@ -19,7 +23,7 @@ notepad .env
 npm run dev
 ```
 
-Set `OPENAI_API_KEY` and `BRAVE_API_KEY` in `.env`. The default model is `gpt-4.1-mini`; change `OPENAI_MODEL` and optionally `OPENAI_BASE_URL` for a compatible chat-completions endpoint. No key is exposed to the renderer or included in exports. Restart after changing environment variables.
+Set `OPENAI_API_KEY` and `BRAVE_API_KEY` in `.env`. The default model is `gpt-4.1-mini`; change `OPENAI_MODEL` and optionally `OPENAI_BASE_URL` for a compatible chat-completions endpoint. These field names also work with compatible providers; each person must supply their own key and follow that provider's setup and quota rules. If you only have an AI key, turn **Web Search** off in Settings before answering. No key is exposed to the renderer or included in exports. Restart after changing environment variables.
 
 For a search provider with a free plan, sign up at [Tavily](https://app.tavily.com) and set `SEARCH_PROVIDER=tavily` plus `TAVILY_API_KEY` in `.env`; a Brave key is then unnecessary. As checked on 16 October 2026, [Tavily's Researcher plan](https://www.tavily.com/pricing) includes 1,000 credits per month without a credit card. Winbot explicitly uses basic search and disables automatic depth upgrades. This replaces web search only; the AI answer provider still needs usable quota.
 
@@ -29,7 +33,7 @@ Launch commands automatically run `npm run setup:desktop` to download the pinned
 
 MVP packaging leaves application resources unpacked so local OCR worker and WebAssembly assets retain ordinary filesystem paths.
 
-`npm run package:portable` assembles a Windows portable folder using the already installed Electron runtime and production dependencies, without downloading installer tools. It preserves an existing portable `.env`, never copies source credentials, and creates no Start Menu entry or system-wide installation. The standard `npm run package` path remains available but encountered a sandbox cache-permission error in this environment.
+`npm run package:portable` assembles a local Windows portable folder using the installed Electron runtime and production dependencies. It preserves an existing portable `.env` for local use. **Never upload that folder directly.** `npm run package:public:win` builds a ZIP from an allowlist, excludes `.env` and logs, and emits a SHA-256 file; inspect those outputs before publishing. The standard `npm run package` path remains available for unpacked builds.
 
 `npm run test:ui` builds and runs the Electron renderer/preload smoke test with synthetic state. It does not capture the desktop or call providers; it creates `preview.png` from Winbot's own UI. If Node 24 reports a certificate-chain error on a managed Windows network, use `$env:NODE_USE_SYSTEM_CA='1'` before installation to use Windows' trusted certificates. Do not disable TLS verification.
 

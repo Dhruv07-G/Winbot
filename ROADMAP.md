@@ -1,6 +1,6 @@
 # Roadmap
 
-## Before public distribution
+## Before a stable multi-platform release
 - Test real capture and permissions on Windows, macOS, X11, and Wayland; signed installers and CI matrix.
 - Region/display picker and extracted-question review before cloud submission.
 - Automated desktop integration tests for consent, capture cancellation, tray behavior, and imports.

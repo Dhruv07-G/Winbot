@@ -32,9 +32,10 @@ try{
 }catch{ /* The bundle can download OCR data on first use if local models are absent. */ }
 try{await fs.writeFile(path.join(output,'.env'),initialEnv,{flag:'wx'});}catch(error){if(error.code!=='EEXIST')throw error;}
 await fs.copyFile('README.md',path.join(output,'README.md'));
+await fs.copyFile('LICENSE',path.join(output,'WINBOT-LICENSE.txt'));
 await fs.writeFile(path.join(output,'SETUP.txt'),
- 'Run Winbot.exe. Keep the entire folder together.\r\n'+
- 'Add your API keys to .env beside Winbot.exe. No keys are bundled.\r\n'+
+ 'Keep the entire folder together. Copy .env.example to .env, then add your own API keys.\r\n'+
+ 'Run Winbot.exe and grant on-demand screen consent in the app. No keys are bundled in the public ZIP.\r\n'+
  'An existing %APPDATA%\\winbot\\.env takes priority over this portable configuration.\r\n'+
  'This is an unsigned portable build. No screen capture occurs before consent.\r\n');
 for(const required of ['Winbot.exe','resources/app/dist/index.html','resources/app/dist-desktop/main.cjs','resources/app/dist-desktop/preload.cjs','resources/app/node_modules/tesseract.js/package.json'])await fs.access(path.join(output,required));
