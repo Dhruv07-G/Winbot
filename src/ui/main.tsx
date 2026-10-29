@@ -296,7 +296,7 @@ function App() {
             <>
               <section className="controls">
                 <button disabled={state.busy} onClick={()=>command("trace-open")}>{t("Trace & Answer", "चुनें और उत्तर पाएँ")}</button>
-                <button disabled={state.busy} onClick={()=>command("multi-open")}>{t("Multi-page Capture","कई पेज कैप्चर")}</button>
+                <button disabled={state.busy} onClick={()=>command("multi-open")}>{t("New multi-page capture","नया कई-पेज कैप्चर")}</button>
                 {state.busy && state.traceItems.length>0 && <button onClick={()=>command("trace-cancel")}>{t("Cancel batch", "बैच रद्द करें")}</button>}
                 {state.traceSelecting && <span>{state.traceCount} {t("questions selected", "प्रश्न चुने गए")}</span>}
                 <button
@@ -322,7 +322,7 @@ function App() {
                   {state.multi.active&&<button onClick={()=>command("multi-done")}>{t("Done · answer now","पूरा · अब उत्तर दें")}</button>}
                   {state.multi.active&&state.multi.mode==="watch"&&<button onClick={()=>command("multi-next")}>{t("Next page · F8","अगला पेज · F8")}</button>}
                   {!state.multi.active&&!state.multi.answering&&state.multi.basket.some(item=>item.error&&item.error!=="multiUnclear")&&<button onClick={()=>command("multi-retry")}>{t("Retry provider errors","सेवा की त्रुटियाँ फिर आज़माएँ")}</button>}
-                  {!state.multi.active&&!state.multi.answering&&<button onClick={()=>command("multi-open")}>{t("Add more pages","और पेज जोड़ें")}</button>}
+                  {!state.multi.active&&!state.multi.answering&&<button onClick={()=>command("multi-add")}>{t("Add more pages","और पेज जोड़ें")}</button>}
                   {!state.multi.active&&!state.multi.answering&&<button onClick={()=>command("multi-clear")}>{t("Clear basket","टोकरी साफ करें")}</button>}
                 </div>
                 {state.multi.basket.map((item,i)=><article key={item.id}>

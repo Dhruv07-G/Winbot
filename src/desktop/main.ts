@@ -283,7 +283,8 @@ async function act(action: string, payload: unknown) {
   switch (action) {
     case "trace-get": return state();
     case "trace-open": await openTrace(); break;
-    case "multi-open": await openTrace(true); break;
+    case "multi-open": if(busy||multi.busy)throw new WinbotError("multiBusy");if(gate.granted)multi.clear();await openTrace(true);break;
+    case "multi-add": await openTrace(true);break;
     case "multi-start": {
       if(busy||multi.busy)throw new WinbotError("multiBusy");
       gate.assertCapture();
